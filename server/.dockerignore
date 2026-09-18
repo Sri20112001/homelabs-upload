@@ -1,0 +1,6 @@
+# Runtime state + secrets stay OUT of the image (mounted as volumes instead).
+data/
+tmp/
+.env
+*.log
+.git
