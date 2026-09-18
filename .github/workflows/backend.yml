@@ -28,6 +28,7 @@ jobs:
         with:
           go-version-file: server/go.mod
           cache: true
+          cache-dependency-path: server/go.sum
       # setup-go caches modules only — persist the *build* cache too,
       # otherwise every run recompiles the world from scratch.
       - uses: actions/cache@v4
@@ -72,9 +73,13 @@ jobs:
           envs: GH_TOKEN,REPO_DIR
           script: |
             set -e
-            # First run ever: clone the repo (later runs just fast-forward it)
+            # First run ever: clone the repo (later runs just fast-forward it).
+            # If something non-git already sits at the path, move it aside first.
             if [ ! -d "$REPO_DIR/.git" ]; then
               mkdir -p "$(dirname "$REPO_DIR")"
+              if [ -e "$REPO_DIR" ]; then
+                mv "$REPO_DIR" "${REPO_DIR}.bak-$(date +%s)"
+              fi
               git clone --branch main "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" "$REPO_DIR"
             fi
             cd "$REPO_DIR"
