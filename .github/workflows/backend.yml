@@ -87,6 +87,15 @@ jobs:
             git reset --hard origin/main
             cd server
             docker compose build --pull
+            # Stop our own stale containers first (same project recreates cleanly).
+            docker compose down --remove-orphans >/dev/null 2>&1 || true
+            # If the port is STILL held, it belongs to something else — report it instead of failing cryptically.
+            if docker ps --format '{{.Ports}}' 2>/dev/null | grep -q '0.0.0.0:8080'; then
+              echo "::error::host port 8080 is held by another container (not this project):"
+              docker ps --filter "publish=8080" --format 'table {{.Names}}\t{{.Ports}}\t{{.Image}}'
+              echo "Stop it (docker stop <name>) or change the host port, then re-run."
+              exit 1
+            fi
             docker compose up -d
             docker image prune -f
             sleep 8
