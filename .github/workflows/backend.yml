@@ -1,3 +1,10 @@
+# Secrets (repo Settings → Secrets and variables → Actions → Secrets tab):
+#   SERVER_HOST    server IP, bare — from `hostname -I` on the server
+#   SERVER_USER    SSH login — must equal `whoami` on the server
+#   SERVER_SSH_KEY private key whose .pub line is in ~/.ssh/authorized_keys
+#                  (verify with: grep -c "<unique-mid-key-fragment>" ~/.ssh/authorized_keys)
+#   SERVER_PATH    repo dir on server, e.g. /home/<user>/homelabs-upload
+# First-time server setup is scripted: DEPLOY_PUBKEY='...' bash server/provision.sh
 name: backend CI/CD
 
 on:
