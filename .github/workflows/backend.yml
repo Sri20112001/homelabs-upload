@@ -31,6 +31,19 @@ jobs:
     permissions:
       contents: read
     steps:
+      - name: Validate deploy secrets
+        run: |
+          fail=0
+          [ -z "${{ secrets.SERVER_HOST }}" ] && { echo "::error::Missing repository secret SERVER_HOST (server IP/hostname)"; fail=1; }
+          [ -z "${{ secrets.SERVER_USER }}" ] && { echo "::error::Missing repository secret SERVER_USER (SSH username)"; fail=1; }
+          [ -z "${{ secrets.SERVER_SSH_KEY }}" ] && { echo "::error::Missing repository secret SERVER_SSH_KEY (private key)"; fail=1; }
+          [ -z "${{ secrets.SERVER_PATH }}" ] && { echo "::error::Missing repository secret SERVER_PATH (repo dir on server)"; fail=1; }
+          if [ $fail -ne 0 ]; then
+            echo "::error::Add them under repo Settings → Secrets and variables → Actions → Secrets tab (NOT Variables tab), then re-run."
+            exit 1
+          fi
+          echo "All deploy secrets present."
+
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v1
         env:
