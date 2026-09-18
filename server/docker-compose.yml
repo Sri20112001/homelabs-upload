@@ -26,8 +26,9 @@ services:
   # pulled automatically, compose starts it with the backend.
   gateway:
     image: caddy:2-alpine
+    # Host 8888: :80 is owned by the server's Apache — do not touch it.
     ports:
-      - "80:80"
+      - "8888:80"
     volumes:
       - ./gateway/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
