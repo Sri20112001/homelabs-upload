@@ -1,4 +1,5 @@
 import { Icon } from '../ui/Icon';
+import { FolderArt } from './FolderArt';
 interface EmptyStateProps {
   onUpload: () => void;
   onNewFolder: () => void;
@@ -7,11 +8,8 @@ interface EmptyStateProps {
 export function EmptyState({ onUpload, onNewFolder }: EmptyStateProps) {
   return (
     <div className="flex flex-col items-center justify-center py-24 text-center">
-      <div className="relative w-24 h-24 mb-6 flex items-center justify-center">
-        <div className="absolute inset-0 bg-(--color-primary-fixed) rounded-full opacity-60" />
-        <div className="relative w-16 h-16 bg-(--color-surface-container-lowest) rounded-full shadow-md flex items-center justify-center text-(--color-primary)">
-          <Icon name="folder_open" size={38} />
-        </div>
+      <div className="mb-6">
+        <FolderArt onOpen={onUpload} label="Upload files to this folder" />
       </div>
       <h2 className="font-family-geist text-[22px] font-semibold text-(--color-on-surface) mb-2">
         This folder is empty

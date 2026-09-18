@@ -1,5 +1,14 @@
-const CACHE = 'nodevault-v1';
-const SHELL = ['/', '/src/main.tsx'];
+// Bumped to v2: purges the poisoned v1 cache (see activate handler below).
+const CACHE = 'nodevault-v2';
+const SHELL = ['/'];
+
+// Dev hosts (vite) must never be intercepted — HMR modules, /metrics and
+// SPA navigations would otherwise be served stale or break outright.
+function isDevHost() {
+  const { hostname, port } = self.location;
+  if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') return true;
+  return port === '3456' || port === '3457' || port === '5173';
+}
 
 self.addEventListener('install', (e) => {
   e.waitUntil(
@@ -20,18 +29,36 @@ self.addEventListener('activate', (e) => {
 });
 
 self.addEventListener('fetch', (e) => {
-  // Only cache GET requests; pass API calls through
   if (e.request.method !== 'GET') return;
-  if (e.request.url.includes('/api/')) return;
+  if (isDevHost()) return;
 
+  const url = new URL(e.request.url);
+  if (url.origin !== self.location.origin) return; // fonts, CDNs, API hosts
+  if (url.pathname.startsWith('/api/')) return;    // backend passthrough
+  if (url.pathname === '/metrics') return;         // live metrics, never cache
+
+  // SPA navigations: network-first, fall back to cached shell.
+  if (e.request.mode === 'navigate') {
+    e.respondWith(
+      fetch(e.request).then((res) => {
+        // Clone synchronously — before the page touches the body — or the
+        // later put() throws "Response body is already used".
+        const copy = res.clone();
+        if (res.ok) caches.open(CACHE).then((c) => c.put('/', copy)).catch(() => {});
+        return res;
+      }).catch(() => caches.match('/'))
+    );
+    return;
+  }
+
+  // Static assets: stale-while-revalidate.
   e.respondWith(
     caches.match(e.request).then((cached) => {
       const network = fetch(e.request).then((res) => {
-        if (res.ok) {
-          caches.open(CACHE).then((c) => c.put(e.request, res.clone()));
-        }
+        const copy = res.clone();
+        if (res.ok) caches.open(CACHE).then((c) => c.put(e.request, copy)).catch(() => {});
         return res;
-      });
+      }).catch(() => cached);
       return cached ?? network;
     })
   );

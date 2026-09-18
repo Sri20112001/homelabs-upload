@@ -3,6 +3,8 @@ import { filesApi } from '../../api/files';
 import type { FileItem } from '../../types';
 import { getFileIcon } from '../../utils';
 import { Icon } from '../ui/Icon';
+import { AUDIO_EXTS, IMAGE_EXTS, PREVIEW_TEXT_EXTS, VIDEO_EXTS } from '../../config/contentTypes';
+import { PREVIEW_TEXT_CAP } from '../../config/app';
 
 interface FilePreviewProps {
   item: FileItem;
@@ -10,24 +12,23 @@ interface FilePreviewProps {
 
 type PreviewKind = 'image' | 'video' | 'audio' | 'pdf' | 'text' | 'none';
 
+function inSet(set: readonly string[], ext: string): boolean {
+  return (set as readonly string[]).includes(ext);
+}
+
 function getPreviewKind(item: FileItem): PreviewKind {
   const ext = (item.extension ?? '').replace('.', '').toLowerCase();
   const mime = item.mime_type ?? '';
 
-  if (mime.startsWith('image/') || ['jpg','jpeg','png','gif','webp','svg','bmp'].includes(ext))
+  if (mime.startsWith('image/') || inSet(IMAGE_EXTS, ext))
     return 'image';
-  if (mime.startsWith('video/') || ['mp4','webm','ogg','mov'].includes(ext))
+  if (mime.startsWith('video/') || inSet(VIDEO_EXTS, ext))
     return 'video';
-  if (mime.startsWith('audio/') || ['mp3','flac','wav','ogg','aac','m4a'].includes(ext))
+  if (mime.startsWith('audio/') || inSet(AUDIO_EXTS, ext))
     return 'audio';
   if (ext === 'pdf' || mime === 'application/pdf')
     return 'pdf';
-  if (
-    mime.startsWith('text/') ||
-    ['txt','md','log','sh','bash','py','js','ts','jsx','tsx','go','rs','c','cpp',
-     'java','rb','php','yml','yaml','toml','json','xml','env','conf','cfg','ini',
-     'css','html','sql','csv'].includes(ext)
-  )
+  if (mime.startsWith('text/') || inSet(PREVIEW_TEXT_EXTS, ext))
     return 'text';
   return 'none';
 }
@@ -42,7 +43,7 @@ function TextPreview({ url }: { url: string }) {
         if (!r.ok) throw new Error();
         return r.text();
       })
-      .then((t) => setText(t.slice(0, 8000))) // cap at 8 KB for preview
+      .then((t) => setText(t.slice(0, PREVIEW_TEXT_CAP)))
       .catch(() => setError(true));
   }, [url]);
 

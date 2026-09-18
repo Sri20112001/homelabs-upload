@@ -51,32 +51,11 @@ interface ServerConfig {
   cors_origin: string;
 }
 
-interface MetricsData {
-  requests_total: number;
-  request_errors: number;
-  upload_bytes_total: number;
-  uploads_total: number;
-  latency_avg_ms: number;
-}
 
-function parseMetrics(text: string): MetricsData {
-  const get = (name: string) => {
-    const m = text.match(new RegExp(`^${name}\\s+([\\d.]+)`, 'm'));
-    return m ? parseFloat(m[1]) : 0;
-  };
-  return {
-    requests_total: get('filemanager_requests_total'),
-    request_errors: get('filemanager_request_errors_total'),
-    upload_bytes_total: get('filemanager_upload_bytes_total'),
-    uploads_total: get('filemanager_uploads_total'),
-    latency_avg_ms: get('filemanager_request_latency_avg_ms'),
-  };
-}
 
 export function SettingsPage() {
   const [cfg, setCfg] = useState<ServerConfig | null>(null);
   const [draft, setDraft] = useState<ServerConfig | null>(null);
-  const [metrics, setMetrics] = useState<MetricsData | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [saved, setSaved] = useState(false);
@@ -86,13 +65,9 @@ export function SettingsPage() {
 
   const loadAll = useCallback(async () => {
     try {
-      const [c, m] = await Promise.all([
-        filesApi.getConfig(),
-        fetch('/metrics').then((r) => r.text()),
-      ]);
+      const c = await filesApi.getConfig();
       setCfg(c);
       setDraft(c);
-      setMetrics(parseMetrics(m));
     } catch {
       setError('Failed to load settings');
     }
@@ -153,7 +128,7 @@ export function SettingsPage() {
   );
 
   return (
-    <div className="flex flex-col w-full pb-16 max-w-2xl mx-auto">
+    <div className="flex flex-col w-full pb-16 max-w-8xl mx-auto">
       <div className="mb-8">
         <h1 className="font-(family-name:--font-family-geist) text-[22px] font-semibold text-(--color-on-surface) mb-1">
           Settings
@@ -239,55 +214,6 @@ export function SettingsPage() {
           })}
         </div>
       </section>
-
-      {/* Metrics cards */}
-      {metrics && (
-        <section className="mb-8">
-          <h2 className="font-(family-name:--font-family-geist) text-[13px] font-semibold text-(--color-secondary) uppercase tracking-wider mb-3">
-            Server Metrics
-          </h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {[
-              { label: 'Total Requests', value: metrics.requests_total.toLocaleString(), icon: 'http' },
-              { label: 'Errors', value: metrics.request_errors.toLocaleString(), icon: 'error_outline' },
-              { label: 'Avg Latency', value: `${metrics.latency_avg_ms.toFixed(1)} ms`, icon: 'speed' },
-              { label: 'Uploads', value: metrics.uploads_total.toLocaleString(), icon: 'upload' },
-              { label: 'Upload Data', value: formatBytes(metrics.upload_bytes_total), icon: 'storage' },
-              {
-                label: 'Error Rate',
-                value:
-                  metrics.requests_total > 0
-                    ? `${((metrics.request_errors / metrics.requests_total) * 100).toFixed(1)}%`
-                    : '0%',
-                icon: 'percent',
-              },
-            ].map(({ label, value, icon }) => (
-              <div
-                key={label}
-                className="flex flex-col gap-2 p-4 rounded-xl bg-(--color-surface-container-lowest) border border-(--color-surface-container-high) shadow-sm"
-              >
-                <div className="flex items-center gap-2">
-                  <Icon name={icon} size={16} className="text-(--color-secondary)" />
-                  <span className="font-(family-name:--font-family-geist) text-[11px] text-(--color-secondary)">
-                    {label}
-                  </span>
-                </div>
-                <span className="font-(family-name:--font-family-geist) text-[20px] font-semibold text-(--color-on-surface)">
-                  {value}
-                </span>
-              </div>
-            ))}
-          </div>
-          <button
-            type="button"
-            onClick={loadAll}
-            className="mt-3 flex items-center gap-1.5 text-(--color-secondary) hover:text-(--color-primary) font-(family-name:--font-family-geist) text-[11px] transition-colors"
-          >
-            <Icon name="refresh" size={14} />
-            Refresh metrics
-          </button>
-        </section>
-      )}
 
       {/* Config form */}
       {draft && (

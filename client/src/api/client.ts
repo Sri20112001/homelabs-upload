@@ -1,6 +1,7 @@
 import type { ApiErrorResponse } from '../types';
+import { API_BASE_URL, CHUNK_SIZE } from '../config/app';
 
-const BASE = '/api/v1';
+const BASE = API_BASE_URL;
 
 export class ApiError extends Error {
   code: string;
@@ -105,7 +106,7 @@ export const client = {
 
       const form = new FormData();
       form.append('file', file);
-      xhr.open('POST', `/api/v1/files/upload?path=${encodeURIComponent(destPath)}`);
+      xhr.open('POST', `${BASE}/files/upload?path=${encodeURIComponent(destPath)}`);
       xhr.send(form);
     });
   },
@@ -118,7 +119,6 @@ export const client = {
     onProgress: (pct: number, speed: number) => void,
     signal: AbortSignal,
   ): Promise<{ message: string; path: string }> {
-    const CHUNK_SIZE = 5 * 1024 * 1024; // 5 MB
     const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
     let uploaded = 0;
     let lastTime = Date.now();
@@ -127,7 +127,7 @@ export const client = {
       if (signal.aborted) throw new ApiError('CANCELLED', 'Upload cancelled', 0);
       const chunk = file.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
       const res = await fetch(
-        `/api/v1/files/chunk?upload_id=${encodeURIComponent(uploadId)}&index=${i}`,
+        `${BASE}/files/chunk?upload_id=${encodeURIComponent(uploadId)}&index=${i}`,
         { method: 'POST', body: chunk, signal },
       );
       if (!res.ok) throw new ApiError('INTERNAL_ERROR', `Chunk ${i} failed`, res.status);
@@ -139,7 +139,7 @@ export const client = {
       onProgress(Math.round((uploaded / file.size) * 100), speed);
     }
 
-    const finalRes = await fetch('/api/v1/files/chunk/finalize', {
+    const finalRes = await fetch(`${BASE}/files/chunk/finalize`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ upload_id: uploadId, dest_dir: destPath, filename: file.name }),

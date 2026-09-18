@@ -45,7 +45,7 @@ func New(cfg *config.Config) *gin.Engine {
 	rc := handlers.InitRuntimeConfig(cfg)
 	ch := handlers.NewConfigHandler(rc)
 
-	v1 := r.Group("/api/v1", auth)
+	v1 := r.Group("/api", auth)
 	{
 		files := v1.Group("/files")
 		files.GET("", fh.ListDirectory)

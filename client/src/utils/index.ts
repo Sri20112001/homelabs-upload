@@ -23,43 +23,32 @@ export function formatRelativeTime(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
-export function getFileIcon(name: string, mimeType?: string): string {
-  const ext = name.split('.').pop()?.toLowerCase() ?? '';
-  const mime = mimeType ?? '';
+import {
+  FILE_COLOR_RULES,
+  FILE_ICON_RULES,
+  fileExt,
+  type FileTypeRule,
+} from '../config/contentTypes';
 
-  if (mime.startsWith('image/') || ['jpg','jpeg','png','gif','webp','svg','bmp','ico'].includes(ext))
-    return 'image';
-  if (mime.startsWith('video/') || ['mp4','mkv','avi','mov','webm','flv'].includes(ext))
-    return 'movie';
-  if (mime.startsWith('audio/') || ['mp3','flac','wav','ogg','aac'].includes(ext))
-    return 'audio_file';
-  if (ext === 'pdf') return 'picture_as_pdf';
-  if (['zip','tar','gz','bz2','xz','zst','7z','rar'].includes(ext)) return 'folder_zip';
-  if (['js','ts','jsx','tsx','py','go','rs','c','cpp','java','rb','php','sh','bash'].includes(ext))
-    return 'code';
-  if (['yml','yaml','toml','json','xml','env','conf','cfg','ini'].includes(ext))
-    return 'data_object';
-  if (['md','txt','rst','log'].includes(ext)) return 'description';
-  if (['doc','docx','odt'].includes(ext)) return 'article';
-  if (['xls','xlsx','csv'].includes(ext)) return 'table_chart';
-  if (['ppt','pptx'].includes(ext)) return 'slideshow';
-  if (['iso','img','bin'].includes(ext)) return 'disc_full';
-  return 'draft';
+function matchRule(rules: FileTypeRule[], ext: string, mime: string): string | null {
+  for (const rule of rules) {
+    if (rule.mimePrefix && mime.startsWith(rule.mimePrefix)) return rule.value;
+    if ((rule.exts as readonly string[]).includes(ext)) return rule.value;
+  }
+  return null;
+}
+
+export function getFileIcon(name: string, mimeType?: string): string {
+  return (
+    matchRule(FILE_ICON_RULES, fileExt(name), mimeType ?? '') ?? 'draft'
+  );
 }
 
 export function getFileColor(name: string, mimeType?: string): string {
-  const ext = name.split('.').pop()?.toLowerCase() ?? '';
-  const mime = mimeType ?? '';
-
-  if (mime.startsWith('image/') || ['jpg','jpeg','png','gif','webp','svg'].includes(ext))
-    return 'text-primary';
-  if (mime.startsWith('video/') || ['mp4','mkv','avi','mov'].includes(ext))
-    return 'text-secondary';
-  if (ext === 'pdf') return 'text-error';
-  if (['zip','tar','gz','bz2','xz','zst','7z','rar'].includes(ext)) return 'text-tertiary';
-  if (['js','ts','jsx','tsx','py','go','rs','sh'].includes(ext)) return 'text-primary';
-  if (['yml','yaml','json','toml'].includes(ext)) return 'text-secondary';
-  return 'text-on-surface-variant';
+  return (
+    matchRule(FILE_COLOR_RULES, fileExt(name), mimeType ?? '') ??
+    'text-on-surface-variant'
+  );
 }
 
 export function joinPath(...parts: string[]): string {

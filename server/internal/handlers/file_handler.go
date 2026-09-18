@@ -23,7 +23,7 @@ func NewFileHandler(svc *services.FileService) *FileHandler {
 	return &FileHandler{svc: svc}
 }
 
-// ListDirectory  GET /api/v1/files?path=
+// ListDirectory  GET /api/files?path=
 func (h *FileHandler) ListDirectory(c *gin.Context) {
 	path := c.DefaultQuery("path", "/")
 	resp, err := h.svc.ListDirectory(path)
@@ -34,7 +34,7 @@ func (h *FileHandler) ListDirectory(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
-// GetMetadata  GET /api/v1/files/metadata?path=
+// GetMetadata  GET /api/files/metadata?path=
 func (h *FileHandler) GetMetadata(c *gin.Context) {
 	path := c.Query("path")
 	if path == "" {
@@ -49,7 +49,7 @@ func (h *FileHandler) GetMetadata(c *gin.Context) {
 	c.JSON(http.StatusOK, item)
 }
 
-// Download  GET /api/v1/files/download?path=
+// Download  GET /api/files/download?path=
 func (h *FileHandler) Download(c *gin.Context) {
 	path := c.Query("path")
 	if path == "" {
@@ -69,7 +69,7 @@ func (h *FileHandler) Download(c *gin.Context) {
 	c.DataFromReader(http.StatusOK, info.Size(), mimeType, f, nil)
 }
 
-// Upload  POST /api/v1/files/upload?path=
+// Upload  POST /api/files/upload?path=
 func (h *FileHandler) Upload(c *gin.Context) {
 	destDir := c.DefaultQuery("path", "/")
 
@@ -94,7 +94,7 @@ func (h *FileHandler) Upload(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{"message": "file uploaded successfully", "path": clientPath})
 }
 
-// CreateDirectory  POST /api/v1/directories
+// CreateDirectory  POST /api/directories
 func (h *FileHandler) CreateDirectory(c *gin.Context) {
 	var req struct {
 		Path string `json:"path" binding:"required"`
@@ -110,7 +110,7 @@ func (h *FileHandler) CreateDirectory(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{"message": "directory created", "path": req.Path})
 }
 
-// Rename  PATCH /api/v1/files
+// Rename  PATCH /api/files
 func (h *FileHandler) Rename(c *gin.Context) {
 	var req struct {
 		Path    string `json:"path"     binding:"required"`
@@ -127,7 +127,7 @@ func (h *FileHandler) Rename(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "renamed successfully"})
 }
 
-// Move  POST /api/v1/files/move
+// Move  POST /api/files/move
 func (h *FileHandler) Move(c *gin.Context) {
 	var req struct {
 		Source      string `json:"source"      binding:"required"`
@@ -144,7 +144,7 @@ func (h *FileHandler) Move(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "moved successfully"})
 }
 
-// Copy  POST /api/v1/files/copy
+// Copy  POST /api/files/copy
 func (h *FileHandler) Copy(c *gin.Context) {
 	var req struct {
 		Source      string `json:"source"      binding:"required"`
@@ -161,7 +161,7 @@ func (h *FileHandler) Copy(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "copied successfully"})
 }
 
-// Delete  DELETE /api/v1/files
+// Delete  DELETE /api/files
 func (h *FileHandler) Delete(c *gin.Context) {
 	var req struct {
 		Path      string `json:"path"      binding:"required"`
@@ -178,7 +178,7 @@ func (h *FileHandler) Delete(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "deleted successfully"})
 }
 
-// Search  GET /api/v1/search?q=&path=
+// Search  GET /api/search?q=&path=
 func (h *FileHandler) Search(c *gin.Context) {
 	query := c.Query("q")
 	if query == "" {
@@ -194,7 +194,7 @@ func (h *FileHandler) Search(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"query": query, "results": results})
 }
 
-// StorageInfo  GET /api/v1/storage
+// StorageInfo  GET /api/storage
 func (h *FileHandler) StorageInfo(c *gin.Context) {
 	info, err := h.svc.StorageInfo()
 	if err != nil {
@@ -204,7 +204,7 @@ func (h *FileHandler) StorageInfo(c *gin.Context) {
 	c.JSON(http.StatusOK, info)
 }
 
-// ZipDownload  POST /api/v1/files/zip
+// ZipDownload  POST /api/files/zip
 func (h *FileHandler) ZipDownload(c *gin.Context) {
 	var req struct {
 		Paths []string `json:"paths" binding:"required"`
@@ -228,7 +228,7 @@ func (h *FileHandler) ZipDownload(c *gin.Context) {
 	}
 }
 
-// FolderSize  GET /api/v1/files/size?path=
+// FolderSize  GET /api/files/size?path=
 func (h *FileHandler) FolderSize(c *gin.Context) {
 	path := c.Query("path")
 	if path == "" {
@@ -243,7 +243,7 @@ func (h *FileHandler) FolderSize(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
-// UploadChunk  POST /api/v1/files/chunk?upload_id=&index=
+// UploadChunk  POST /api/files/chunk?upload_id=&index=
 func (h *FileHandler) UploadChunk(c *gin.Context) {
 	uploadID := c.Query("upload_id")
 	indexStr := c.Query("index")
@@ -263,7 +263,7 @@ func (h *FileHandler) UploadChunk(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "chunk received"})
 }
 
-// FinalizeChunk  POST /api/v1/files/chunk/finalize
+// FinalizeChunk  POST /api/files/chunk/finalize
 func (h *FileHandler) FinalizeChunk(c *gin.Context) {
 	var req struct {
 		UploadID string `json:"upload_id" binding:"required"`
@@ -282,7 +282,7 @@ func (h *FileHandler) FinalizeChunk(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{"message": "file assembled", "path": path})
 }
 
-// TrashMove  POST /api/v1/trash
+// TrashMove  POST /api/trash
 func (h *FileHandler) TrashMove(c *gin.Context) {
 	var req struct {
 		Path string `json:"path" binding:"required"`
@@ -298,7 +298,7 @@ func (h *FileHandler) TrashMove(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "moved to trash"})
 }
 
-// TrashList  GET /api/v1/trash
+// TrashList  GET /api/trash
 func (h *FileHandler) TrashList(c *gin.Context) {
 	items, err := h.svc.TrashList()
 	if err != nil {
@@ -308,7 +308,7 @@ func (h *FileHandler) TrashList(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"items": items})
 }
 
-// TrashRestore  POST /api/v1/trash/restore
+// TrashRestore  POST /api/trash/restore
 func (h *FileHandler) TrashRestore(c *gin.Context) {
 	var req struct {
 		ID string `json:"id" binding:"required"`
@@ -324,7 +324,7 @@ func (h *FileHandler) TrashRestore(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "restored"})
 }
 
-// TrashPurge  DELETE /api/v1/trash
+// TrashPurge  DELETE /api/trash
 func (h *FileHandler) TrashPurge(c *gin.Context) {
 	if err := h.svc.TrashPurge(); err != nil {
 		respondError(c, err)
@@ -333,7 +333,7 @@ func (h *FileHandler) TrashPurge(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "trash purged"})
 }
 
-// WatchDirectory  GET /api/v1/watch?path= (SSE)
+// WatchDirectory  GET /api/watch?path= (SSE)
 func (h *FileHandler) WatchDirectory(c *gin.Context) {
 	path := c.DefaultQuery("path", "/")
 	abs, err := h.svc.ResolvePath(path)
@@ -383,7 +383,7 @@ func (h *FileHandler) WatchDirectory(c *gin.Context) {
 	}
 }
 
-// BulkRename  POST /api/v1/files/bulk-rename
+// BulkRename  POST /api/files/bulk-rename
 func (h *FileHandler) BulkRename(c *gin.Context) {
 	var req struct {
 		Renames []struct {

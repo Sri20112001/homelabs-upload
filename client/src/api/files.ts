@@ -1,9 +1,13 @@
 import { client } from './client';
+import { API_BASE_URL } from '../config/app';
 import type { ListResponse, FileItem, StorageInfo, SearchResponse, TrashItem, FolderSizeResult } from '../types';
 
 export const filesApi = {
-  list(path: string, signal?: AbortSignal): Promise<ListResponse> {
-    return client.get(`/files?path=${encodeURIComponent(path)}`, signal);
+  // NOTE: Go serializes empty slices as `null`, so every list-shaped
+  // response is normalized to [] here — never trust .items/.results directly.
+  async list(path: string, signal?: AbortSignal): Promise<ListResponse> {
+    const res = await client.get<ListResponse>(`/files?path=${encodeURIComponent(path)}`, signal);
+    return { ...res, items: res.items ?? [] };
   },
 
   metadata(path: string): Promise<FileItem> {
@@ -11,12 +15,12 @@ export const filesApi = {
   },
 
   downloadUrl(path: string): string {
-    return `/api/v1/files/download?path=${encodeURIComponent(path)}`;
+    return `${API_BASE_URL}/files/download?path=${encodeURIComponent(path)}`;
   },
 
   zipDownload(paths: string[], name = 'download.zip'): void {
     // POST to zip endpoint, receive blob, trigger download
-    fetch('/api/v1/files/zip', {
+    fetch(`${API_BASE_URL}/files/zip`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ paths, name }),
@@ -59,8 +63,9 @@ export const filesApi = {
     return client.delete('/files', { path, recursive });
   },
 
-  search(q: string, path = '/'): Promise<SearchResponse> {
-    return client.get(`/search?q=${encodeURIComponent(q)}&path=${encodeURIComponent(path)}`);
+  async search(q: string, path = '/'): Promise<SearchResponse> {
+    const res = await client.get<SearchResponse>(`/search?q=${encodeURIComponent(q)}&path=${encodeURIComponent(path)}`);
+    return { ...res, results: res.results ?? [] };
   },
 
   storage(): Promise<StorageInfo> {
@@ -68,8 +73,9 @@ export const filesApi = {
   },
 
   // Trash
-  trashList(): Promise<{ items: TrashItem[] }> {
-    return client.get('/trash');
+  async trashList(): Promise<{ items: TrashItem[] }> {
+    const res = await client.get<{ items: TrashItem[] }>('/trash');
+    return { ...res, items: res.items ?? [] };
   },
   trashMove(path: string): Promise<{ message: string }> {
     return client.post('/trash', { path });
@@ -84,7 +90,7 @@ export const filesApi = {
   // Chunked upload
   uploadChunk(uploadId: string, index: number, chunk: Blob): Promise<{ message: string }> {
     return fetch(
-      `/api/v1/files/chunk?upload_id=${encodeURIComponent(uploadId)}&index=${index}`,
+      `${API_BASE_URL}/files/chunk?upload_id=${encodeURIComponent(uploadId)}&index=${index}`,
       { method: 'POST', body: chunk },
     ).then(async (res) => {
       if (!res.ok) throw new Error(`Chunk ${index} failed`);
@@ -98,7 +104,7 @@ export const filesApi = {
 
   // SSE watcher — returns EventSource
   watchDirectory(path: string): EventSource {
-    return new EventSource(`/api/v1/files/watch?path=${encodeURIComponent(path)}`);
+    return new EventSource(`${API_BASE_URL}/files/watch?path=${encodeURIComponent(path)}`);
   },
 
   // Runtime config

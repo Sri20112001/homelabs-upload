@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
+import { Routes, Route, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { TopBar } from './components/layout/TopBar';
 import { Dock } from './components/layout/Dock';
+import { DashboardPage } from './pages/DashboardPage';
 import { FilesPage } from './pages/FilesPage';
 import { SearchPage } from './pages/SearchPage';
 import { TransfersPage } from './pages/TransfersPage';
@@ -14,27 +16,22 @@ import { ToastProvider, useToast } from './components/ui/Toast';
 import { useTransfers } from './hooks/useTransfers';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
 
-type Page = 'files' | 'search' | 'transfers' | 'settings';
-
-function parseUrlState(): { page: Page; path: string } {
-  const params = new URLSearchParams(window.location.search);
-  const page = (params.get('page') ?? 'files') as Page;
-  const path = params.get('path') ?? '/';
-  return { page, path };
-}
-
-function pushUrlState(page: Page, path: string) {
-  const params = new URLSearchParams();
-  params.set('page', page);
-  if (path !== '/') params.set('path', path);
-  const url = params.toString() ? `?${params}` : window.location.pathname;
-  window.history.pushState({ page, path }, '', url);
-}
-
 const AppInner = () => {
-  const initial = parseUrlState();
-  const [page, setPage] = useState<Page>(initial.page);
-  const [filesPath, setFilesPath] = useState(initial.path);
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [params, setParams] = useSearchParams();
+  // Active page derives from the route; folder path lives in ?path= (deep-linkable).
+  const page = location.pathname.split('/')[1] || 'files';
+  const filesPath = params.get('path') ?? '/';
+  const setFilesPath = useCallback((p: string, opts?: { replace?: boolean }) => {
+    setParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (p === '/') next.delete('path');
+      else next.set('path', p);
+      return next;
+    }, opts);
+  }, [setParams]);
+
   const [showUpload, setShowUpload] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
@@ -44,18 +41,10 @@ const AppInner = () => {
 
   const { transfers, enqueue, cancel, clearDone, activeCount } = useTransfers();
 
-  useEffect(() => { pushUrlState(page, filesPath); }, [page, filesPath]);
-
+  // Reset scroll when switching routes (folder-to-folder keeps position).
   useEffect(() => {
-    const handler = (e: PopStateEvent) => {
-      if (e.state) {
-        setPage(e.state.page ?? 'files');
-        setFilesPath(e.state.path ?? '/');
-      }
-    };
-    window.addEventListener('popstate', handler);
-    return () => window.removeEventListener('popstate', handler);
-  }, []);
+    window.scrollTo(0, 0);
+  }, [location.pathname]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -73,10 +62,14 @@ const AppInner = () => {
     return () => document.removeEventListener('keydown', handler);
   }, []);
 
+  const goPage = useCallback((p: string) => {
+    // Preserve ?path= so the Upload modal keeps its destination off the files route.
+    navigate({ pathname: `/${p}`, search: location.search });
+  }, [navigate, location.search]);
+
   const handleNavigate = useCallback((path: string) => {
-    setFilesPath(path);
-    setPage('files');
-  }, []);
+    navigate({ pathname: '/files', search: path === '/' ? '' : `?path=${encodeURIComponent(path)}` });
+  }, [navigate]);
 
   const handleEnqueue = useCallback((file: File, destPath: string) => {
     enqueue(file, destPath);
@@ -92,39 +85,53 @@ const AppInner = () => {
 
   return (
     <div className="min-h-screen bg-canvas text-brand-highlight pb-28">
-      <TopBar onSearchOpen={() => setShowSearch(true)} onSettingsOpen={() => setPage('settings')} />
+      <TopBar onSearchOpen={() => setShowSearch(true)} onSettingsOpen={() => goPage('settings')} />
       <OfflineBanner online={online} />
 
       <main className="w-full pt-16 px-(--spacing-margin) md:px-(--spacing-margin-desktop)">
-        {page === 'files' && (
-          <FilesPage
-            path={filesPath}
-            onPathChange={setFilesPath}
-            onUpload={() => setShowUpload(true)}
-            onEnqueueFiles={handleEnqueueFiles}
+        <Routes>
+          {/* <Route path="/" element={<Navigate to="/dashboard" replace />} /> */}
+          <Route
+            path="/"
+            element={<DashboardPage onUpload={() => setShowUpload(true)} />}
           />
-        )}
-        {page === 'search' && <SearchPage onNavigate={handleNavigate} />}
-        {page === 'transfers' && (
-          <TransfersPage
-            transfers={transfers}
-            onCancel={cancel}
-            onClearDone={clearDone}
-            activeCount={activeCount}
+          <Route
+            path="/files"
+            element={
+              <FilesPage
+                path={filesPath}
+                onPathChange={(p) => setFilesPath(p)}
+                onUpload={() => setShowUpload(true)}
+                onEnqueueFiles={handleEnqueueFiles}
+              />
+            }
           />
-        )}
-        {page === 'settings' && <SettingsPage />}
+          <Route path="/search" element={<SearchPage onNavigate={handleNavigate} />} />
+          <Route
+            path="/transfers"
+            element={
+              <TransfersPage
+                transfers={transfers}
+                onCancel={cancel}
+                onClearDone={clearDone}
+                activeCount={activeCount}
+              />
+            }
+          />
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        </Routes>
       </main>
 
       <Dock
         activePage={page}
-        onNavigate={(p) => setPage(p as Page)}
+        onNavigate={goPage}
         onUpload={() => setShowUpload(true)}
         transferCount={activeCount}
       />
 
       {page !== 'transfers' && transfers.length > 0 && (
-        <div className="fixed bottom-24 right-4 md:right-8 z-40 w-[calc(100vw-2rem)] max-w-[480px]">
+        <div className="fixed bottom-24 right-4 md:right-8 z-40 w-[calc(100vw-2rem)] max-w-120">
           <TransferCenter
             transfers={transfers}
             onCancel={cancel}

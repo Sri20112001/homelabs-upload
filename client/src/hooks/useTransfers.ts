@@ -1,8 +1,8 @@
 import { useState, useCallback } from 'react';
 import { client } from '../api/client';
+import { CHUNK_THRESHOLD } from '../config/app';
 import type { TransferItem } from '../types';
 
-const CHUNK_THRESHOLD = 5 * 1024 * 1024; // 5 MB
 let nextId = 0;
 let nextUploadId = 0;
 

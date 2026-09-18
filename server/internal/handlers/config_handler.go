@@ -39,7 +39,7 @@ func GetRuntimeConfig() (string, int64, string) {
 	return globalRuntimeCfg.StorageRoot, globalRuntimeCfg.MaxUploadSize, globalRuntimeCfg.CORSOrigin
 }
 
-// ConfigHandler handles GET and PATCH /api/v1/config
+// ConfigHandler handles GET and PATCH /api/config
 type ConfigHandler struct {
 	rc *RuntimeConfig
 }
@@ -48,7 +48,7 @@ func NewConfigHandler(rc *RuntimeConfig) *ConfigHandler {
 	return &ConfigHandler{rc: rc}
 }
 
-// GetConfig  GET /api/v1/config
+// GetConfig  GET /api/config
 func (h *ConfigHandler) GetConfig(c *gin.Context) {
 	h.rc.mu.RLock()
 	defer h.rc.mu.RUnlock()
@@ -59,7 +59,7 @@ func (h *ConfigHandler) GetConfig(c *gin.Context) {
 	})
 }
 
-// PatchConfig  PATCH /api/v1/config
+// PatchConfig  PATCH /api/config
 func (h *ConfigHandler) PatchConfig(c *gin.Context) {
 	var req struct {
 		StorageRoot   *string `json:"storage_root"`

@@ -74,7 +74,7 @@ The `Authenticator` interface in `internal/middleware/recovery.go` is designed t
 
 ## API Reference
 
-All routes are prefixed with `/api/v1`.
+All routes are prefixed with `/api`.
 
 ### Health
 
@@ -85,25 +85,25 @@ GET /health
 ### List Directory
 
 ```
-GET /api/v1/files?path=/Documents
+GET /api/files?path=/Documents
 ```
 
 ### File Metadata
 
 ```
-GET /api/v1/files/metadata?path=/Documents/report.pdf
+GET /api/files/metadata?path=/Documents/report.pdf
 ```
 
 ### Download
 
 ```
-GET /api/v1/files/download?path=/Documents/report.pdf
+GET /api/files/download?path=/Documents/report.pdf
 ```
 
 ### Upload
 
 ```
-POST /api/v1/files/upload?path=/Documents
+POST /api/files/upload?path=/Documents
 Content-Type: multipart/form-data
 field: file
 ```
@@ -113,35 +113,35 @@ Returns `409 Conflict` if the file already exists.
 ### Create Directory
 
 ```
-POST /api/v1/directories
+POST /api/directories
 {"path": "/Documents/New Folder"}
 ```
 
 ### Rename
 
 ```
-PATCH /api/v1/files
+PATCH /api/files
 {"path": "/Documents/old.txt", "new_name": "new.txt"}
 ```
 
 ### Move
 
 ```
-POST /api/v1/files/move
+POST /api/files/move
 {"source": "/Documents/file.txt", "destination": "/Backup/file.txt"}
 ```
 
 ### Copy
 
 ```
-POST /api/v1/files/copy
+POST /api/files/copy
 {"source": "/Documents/file.txt", "destination": "/Backup/file.txt"}
 ```
 
 ### Delete
 
 ```
-DELETE /api/v1/files
+DELETE /api/files
 {"path": "/Documents/file.txt"}
 
 # Directory (must be explicit)
@@ -151,13 +151,13 @@ DELETE /api/v1/files
 ### Search
 
 ```
-GET /api/v1/search?q=report&path=/Documents
+GET /api/search?q=report&path=/Documents
 ```
 
 ### Storage Info
 
 ```
-GET /api/v1/storage
+GET /api/storage
 ```
 
 ---
@@ -169,67 +169,67 @@ GET /api/v1/storage
 curl http://localhost:8080/health
 
 # List root
-curl "http://localhost:8080/api/v1/files?path=/"
+curl "http://localhost:8080/api/files?path=/"
 
 # List subdirectory
-curl "http://localhost:8080/api/v1/files?path=/Documents"
+curl "http://localhost:8080/api/files?path=/Documents"
 
 # File metadata
-curl "http://localhost:8080/api/v1/files/metadata?path=/Documents/report.pdf"
+curl "http://localhost:8080/api/files/metadata?path=/Documents/report.pdf"
 
 # Download
-curl -O "http://localhost:8080/api/v1/files/download?path=/Documents/report.pdf"
+curl -O "http://localhost:8080/api/files/download?path=/Documents/report.pdf"
 
 # Upload
 curl -X POST \
   -F "file=@./example.pdf" \
-  "http://localhost:8080/api/v1/files/upload?path=/Documents"
+  "http://localhost:8080/api/files/upload?path=/Documents"
 
 # Create directory
 curl -X POST \
   -H "Content-Type: application/json" \
   -d '{"path":"/Documents/New Folder"}' \
-  http://localhost:8080/api/v1/directories
+  http://localhost:8080/api/directories
 
 # Rename
 curl -X PATCH \
   -H "Content-Type: application/json" \
   -d '{"path":"/Documents/old.txt","new_name":"new.txt"}' \
-  http://localhost:8080/api/v1/files
+  http://localhost:8080/api/files
 
 # Move
 curl -X POST \
   -H "Content-Type: application/json" \
   -d '{"source":"/Documents/file.txt","destination":"/Backup/file.txt"}' \
-  http://localhost:8080/api/v1/files/move
+  http://localhost:8080/api/files/move
 
 # Copy
 curl -X POST \
   -H "Content-Type: application/json" \
   -d '{"source":"/Documents/file.txt","destination":"/Backup/file.txt"}' \
-  http://localhost:8080/api/v1/files/copy
+  http://localhost:8080/api/files/copy
 
 # Delete file
 curl -X DELETE \
   -H "Content-Type: application/json" \
   -d '{"path":"/Documents/file.txt"}' \
-  http://localhost:8080/api/v1/files
+  http://localhost:8080/api/files
 
 # Delete directory (recursive)
 curl -X DELETE \
   -H "Content-Type: application/json" \
   -d '{"path":"/Documents/old-folder","recursive":true}' \
-  http://localhost:8080/api/v1/files
+  http://localhost:8080/api/files
 
 # Search
-curl "http://localhost:8080/api/v1/search?q=report&path=/Documents"
+curl "http://localhost:8080/api/search?q=report&path=/Documents"
 
 # Storage info
-curl http://localhost:8080/api/v1/storage
+curl http://localhost:8080/api/storage
 
 # With API key
 curl -H "Authorization: Bearer mysecretkey" \
-  "http://localhost:8080/api/v1/files?path=/"
+  "http://localhost:8080/api/files?path=/"
 ```
 
 ---
@@ -241,7 +241,7 @@ curl -H "Authorization: Bearer mysecretkey" \
 - **Upload safety**: files are written to a `.tmp` file first and atomically renamed on success; partial uploads are cleaned up on failure.
 - **Upload size**: enforced via `io.LimitReader` before any data reaches disk.
 - **Streaming**: uploads and downloads use `io.Copy` — large files are never fully loaded into memory.
-- **API key**: if `API_KEY` is set, all `/api/v1` routes require `Authorization: Bearer <key>`. Do not use an empty key in production.
+- **API key**: if `API_KEY` is set, all `/api` routes require `Authorization: Bearer <key>`. Do not use an empty key in production.
 
 ---
 

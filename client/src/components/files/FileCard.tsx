@@ -2,15 +2,14 @@ import { useState } from 'react';
 import type { FileItem } from '../../types';
 import { formatBytes, formatRelativeTime, getFileIcon, getFileColor } from '../../utils';
 import { setInternalDrag, getInternalPath, isInternalDrag } from '../../utils/dnd';
+import { IMAGE_EXTS } from '../../config/contentTypes';
 import { ContextMenu } from './ContextMenu';
 import { filesApi } from '../../api/files';
 import { Icon } from '../ui/Icon';
 
-const IMAGE_EXTS = new Set(['jpg','jpeg','png','gif','webp','svg','bmp']);
-
 function isImage(item: FileItem): boolean {
   const ext = (item.extension ?? '').replace('.', '').toLowerCase();
-  return IMAGE_EXTS.has(ext) || (item.mime_type?.startsWith('image/') ?? false);
+  return (IMAGE_EXTS as readonly string[]).includes(ext) || (item.mime_type?.startsWith('image/') ?? false);
 }
 
 interface FileCardProps {

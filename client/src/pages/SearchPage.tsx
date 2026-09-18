@@ -30,7 +30,7 @@ export function SearchPage({ onNavigate }: SearchPageProps) {
   }, [query]);
 
   return (
-    <div className="flex flex-col w-full pb-16 max-w-3xl mx-auto">
+    <div className="flex flex-col w-full pb-16 max-w-8xl mx-auto">
       <div className="mb-8">
         <h1 className="font-family-geist text-[22px] font-semibold text-(--color-on-surface) mb-1">
           Search

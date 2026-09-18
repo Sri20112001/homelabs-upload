@@ -44,7 +44,7 @@ export function Toolbar({
         <button
           type="button"
           onClick={onNewFolder}
-          className="btn-primary flex items-center gap-1.5 bg-gradient-to-r from-brand-primary to-brand-neon px-(--spacing-space-md) py-1.5 rounded-lg font-family-geist text-[12px] font-medium transition-all shadow-blue-glow"
+          className="btn-primary flex items-center gap-1.5 bg-linear-to-r from-brand-primary to-brand-neon px-(--spacing-space-md) py-1.5 rounded-lg font-family-geist text-[12px] font-medium transition-all shadow-blue-glow"
         >
           <Icon name="create_new_folder" size={17} />
           <span>New Folder</span>

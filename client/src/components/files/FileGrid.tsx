@@ -6,8 +6,9 @@ import { EmptyState } from './EmptyState';
 import { VirtualFileList } from './VirtualFileList';
 import { Icon } from '../ui/Icon';
 import { isExternalFileDrag, isInternalDrag } from '../../utils/dnd';
+import { ARCHIVE_EXTS, DOCUMENT_FILTER_EXTS, MEDIA_FILTER_EXTS } from '../../config/contentTypes';
 
-const VIRTUAL_THRESHOLD = 200;
+import { VIRTUAL_THRESHOLD } from '../../config/app';
 
 interface FileGridProps {
   items: FileItem[];
@@ -34,16 +35,13 @@ function applyFilter(items: FileItem[], filter: FilterType): FileItem[] {
   if (filter === 'all') return items;
   if (filter === 'folders') return items.filter((i) => i.type === 'directory');
   if (filter === 'media') {
-    const exts = new Set(['jpg','jpeg','png','gif','webp','svg','mp4','mkv','avi','mov','mp3','flac','wav']);
-    return items.filter((i) => exts.has((i.extension ?? '').replace('.', '').toLowerCase()));
+    return items.filter((i) => (MEDIA_FILTER_EXTS as readonly string[]).includes((i.extension ?? '').replace('.', '').toLowerCase()));
   }
   if (filter === 'documents') {
-    const exts = new Set(['pdf','doc','docx','txt','md','odt','xls','xlsx','ppt','pptx']);
-    return items.filter((i) => exts.has((i.extension ?? '').replace('.', '').toLowerCase()));
+    return items.filter((i) => (DOCUMENT_FILTER_EXTS as readonly string[]).includes((i.extension ?? '').replace('.', '').toLowerCase()));
   }
   if (filter === 'archives') {
-    const exts = new Set(['zip','tar','gz','bz2','xz','zst','7z','rar','iso']);
-    return items.filter((i) => exts.has((i.extension ?? '').replace('.', '').toLowerCase()));
+    return items.filter((i) => (ARCHIVE_EXTS as readonly string[]).includes((i.extension ?? '').replace('.', '').toLowerCase()));
   }
   return items;
 }

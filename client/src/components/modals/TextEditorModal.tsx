@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Modal } from './Modal';
 import { filesApi } from '../../api/files';
 import { useToast } from '../ui/Toast';
+import { API_BASE_URL } from '../../config/app';
 
 interface TextEditorModalProps {
   path: string;
@@ -10,15 +11,14 @@ interface TextEditorModalProps {
   onSaved: () => void;
 }
 
-const EDITABLE_EXTS = new Set([
-  'txt', 'md', 'json', 'yaml', 'yml', 'toml', 'env', 'sh', 'bash',
-  'js', 'ts', 'jsx', 'tsx', 'py', 'go', 'rs', 'c', 'cpp', 'java',
-  'rb', 'php', 'html', 'css', 'xml', 'conf', 'cfg', 'ini', 'log',
-]);
+import { CODE_HIGHLIGHT_EXTS, EDITABLE_EXTS, fileExt } from '../../config/contentTypes';
 
 export function isEditable(name: string): boolean {
-  const ext = name.split('.').pop()?.toLowerCase() ?? '';
-  return EDITABLE_EXTS.has(ext);
+  return (EDITABLE_EXTS as readonly string[]).includes(fileExt(name));
+}
+
+function isCodeExt(ext: string): boolean {
+  return (CODE_HIGHLIGHT_EXTS as readonly string[]).includes(ext);
 }
 
 export function TextEditorModal({ path, name, onClose, onSaved }: TextEditorModalProps) {
@@ -54,7 +54,7 @@ export function TextEditorModal({ path, name, onClose, onSaved }: TextEditorModa
       await filesApi.delete(path, false);
       const form = new FormData();
       form.append('file', file);
-      const res = await fetch(`/api/v1/files/upload?path=${encodeURIComponent(parentDir)}`, {
+      const res = await fetch(`${API_BASE_URL}/files/upload?path=${encodeURIComponent(parentDir)}`, {
         method: 'POST',
         body: form,
       });
@@ -70,8 +70,7 @@ export function TextEditorModal({ path, name, onClose, onSaved }: TextEditorModa
   };
 
   const isDirty = content !== original;
-  const ext = name.split('.').pop()?.toLowerCase() ?? '';
-  const isCode = ['js','ts','jsx','tsx','py','go','rs','sh','bash','json','yaml','yml','toml','html','css','xml','conf','cfg','ini'].includes(ext);
+  const isCode = isCodeExt(fileExt(name));
 
   return (
     <Modal title={`Edit — ${name}`} onClose={onClose}>

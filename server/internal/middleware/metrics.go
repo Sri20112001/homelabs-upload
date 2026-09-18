@@ -32,7 +32,7 @@ func Metrics() gin.HandlerFunc {
 		}
 		// Track upload bytes from Content-Length on upload endpoints
 		if c.Request.Method == http.MethodPost &&
-			(c.FullPath() == "/api/v1/files/upload" || c.FullPath() == "/api/v1/files/chunk") {
+			(c.FullPath() == "/api/files/upload" || c.FullPath() == "/api/files/chunk") {
 			if c.Writer.Status() < 300 {
 				metricUploadBytesTotal.Add(c.Request.ContentLength)
 				metricUploadCount.Add(1)
