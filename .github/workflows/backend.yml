@@ -96,12 +96,33 @@ jobs:
             docker compose down --remove-orphans >/dev/null 2>&1 || true
             # Stop our own stale containers first (same project recreates cleanly).
             docker compose down --remove-orphans >/dev/null 2>&1 || true
-            # If the port is STILL held, it belongs to something else — report it instead of failing cryptically.
-            if docker ps --format '{{.Ports}}' 2>/dev/null | grep -q '0.0.0.0:8080'; then
-              echo "::error::host port 8080 is held by another container (not this project):"
-              docker ps --filter "publish=8080" --format 'table {{.Names}}\t{{.Ports}}\t{{.Image}}'
-              echo "Stop it (docker stop <name>) or change the host port, then re-run."
-              exit 1
+            # A leftover twin (same image, different project path) also blocks
+            # the port — safe to remove since we rebuild it below.
+            HOLDER="$(docker ps --format '{{.Names}} {{.Image}} {{.Ports}}' 2>/dev/null | grep '8080->8080' || true)"
+            if [ -n "$HOLDER" ]; then
+              echo "port holder: $HOLDER"
+              IMG="$(echo "$HOLDER" | awk '{print $2}')"
+              if [ "$IMG" = "server-backend" ] || [ "$IMG" = "docker.io/library/server-backend" ]; then
+                NAME="$(echo "$HOLDER" | awk '{print $1}')"
+                echo "stale own image container ($NAME) — stopping and removing"
+                docker stop "$NAME" >/dev/null
+                docker rm "$NAME" >/dev/null
+              else
+                echo "::error::host port 8080 is held by a foreign container:"
+                echo "$HOLDER"
+                echo "Stop it (docker stop <name>) or move our port, then re-run."
+                exit 1
+              fi
+            fi
+            # Host (non-docker) process check — needs no sudo for own processes.
+            if command -v ss >/dev/null 2>&1; then
+              HP="$(ss -tlnp 2>/dev/null | grep ':8080 ' || true)"
+              if [ -n "$HP" ]; then
+                echo "::error::host port 8080 is held by a host process (not docker):"
+                echo "$HP"
+                echo "Stop it (e.g. kill <pid> / systemctl stop <service>), then re-run."
+                exit 1
+              fi
             fi
             docker compose up -d
             docker image prune -f
