@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"encoding/json"
-	"net/http"
 	"os"
 	"sync"
 	"time"
@@ -38,15 +37,19 @@ func AuditLogger() gin.HandlerFunc {
 		if f == nil {
 			return
 		}
+		username := ""
+		if v, ok := c.Get("username"); ok {
+			if s, ok := v.(string); ok {
+				username = s
+			}
+		}
 		entry := models.AuditEntry{
 			Time:   time.Now().UTC(),
 			Method: c.Request.Method,
 			Path:   c.Request.URL.Path,
 			Status: c.Writer.Status(),
 			IP:     c.ClientIP(),
-		}
-		if c.Writer.Status() == http.StatusOK || c.Writer.Status() == http.StatusCreated {
-			entry.User = "sysadmin"
+			User:   username,
 		}
 		line, _ := json.Marshal(entry)
 		auditMu.Lock()

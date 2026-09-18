@@ -60,15 +60,27 @@ Storage is mounted at `./data` → `/data/files` inside the container.
 
 ## Authentication
 
-If `API_KEY` is set, every request must include:
+Multi-user logins with per-user activity logging.
+No database server to install — users, sessions and the activity log live in
+an embedded SQLite file at `<parent-of-STORAGE_ROOT>/.nodevault/nodevault.db`
+(auto-created on first run, pre-SQLite `users.json`/`activity.jsonl` are imported once).
 
-```
-Authorization: Bearer <api-key>
-```
+- First run: `POST /api/auth/setup {username, display_name, password}` creates
+  the admin (the login page does this for you).
+- Then: `POST /api/auth/login {username, password}` sets an HttpOnly
+  `nv_session` cookie (`SameSite=Lax`, 30 days, `Secure` auto-enabled on HTTPS)
+  — the browser sends it automatically, including downloads and the SSE watcher.
+- `Authorization: Bearer <token>` and `?token=` still work for scripts and old
+  clients; legacy `API_KEY`, if set, is accepted the same way.
+- Cookie-authenticated mutations are CSRF-guarded (Origin-vs-host check,
+  `internal/middleware/csrf.go`); cross-origin frontends need
+  `credentials: 'include'` and the exact `CORS_ORIGIN`.
+- Roles: `admin` manages members (`/api/users`) and runtime config;
+  `member` uses files and reads the activity feed (`GET /api/activity`).
+- Legacy `API_KEY`, if set, still works as an admin bearer for scripts.
 
-Leave `API_KEY` empty to disable authentication during local development.
-
-The `Authenticator` interface in `internal/middleware/recovery.go` is designed to be replaced with a full auth implementation (JWT, OAuth, etc.) without changing handlers or services.
+The `Authenticator` interface in `internal/middleware/recovery.go` lets you swap
+the session strategy (JWT, OAuth, etc.) without changing handlers or services.
 
 ---
 

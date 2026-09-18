@@ -15,6 +15,7 @@ export const filesApi = {
   },
 
   downloadUrl(path: string): string {
+    // Cookie auth: the browser attaches nv_session automatically.
     return `${API_BASE_URL}/files/download?path=${encodeURIComponent(path)}`;
   },
 
@@ -22,6 +23,7 @@ export const filesApi = {
     // POST to zip endpoint, receive blob, trigger download
     fetch(`${API_BASE_URL}/files/zip`, {
       method: 'POST',
+      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ paths, name }),
     }).then(async (res) => {
@@ -91,7 +93,7 @@ export const filesApi = {
   uploadChunk(uploadId: string, index: number, chunk: Blob): Promise<{ message: string }> {
     return fetch(
       `${API_BASE_URL}/files/chunk?upload_id=${encodeURIComponent(uploadId)}&index=${index}`,
-      { method: 'POST', body: chunk },
+      { method: 'POST', credentials: 'include', body: chunk },
     ).then(async (res) => {
       if (!res.ok) throw new Error(`Chunk ${index} failed`);
       return res.json();
@@ -102,9 +104,11 @@ export const filesApi = {
     return client.post('/files/chunk/finalize', { upload_id: uploadId, dest_dir: destDir, filename });
   },
 
-  // SSE watcher — returns EventSource
+  // SSE watcher — cookies ride along via withCredentials.
   watchDirectory(path: string): EventSource {
-    return new EventSource(`${API_BASE_URL}/files/watch?path=${encodeURIComponent(path)}`);
+    return new EventSource(`${API_BASE_URL}/files/watch?path=${encodeURIComponent(path)}`, {
+      withCredentials: true,
+    });
   },
 
   // Runtime config

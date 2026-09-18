@@ -1,4 +1,7 @@
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useStorage } from '../../hooks/useStorage';
+import { useAuth } from '../../hooks/useAuth';
 import { formatBytes } from '../../utils';
 import { Icon } from '../ui/Icon';
 
@@ -20,6 +23,9 @@ function isLanHost(host: string): boolean {
 
 export function TopBar({ onSearchOpen, onSettingsOpen }: TopBarProps) {
   const storage = useStorage();
+  const { user, isAdmin, logout } = useAuth();
+  const navigate = useNavigate();
+  const [menu, setMenu] = useState(false);
   const usedPct = storage
     ? Math.round((storage.used_bytes / storage.total_bytes) * 100)
     : 0;
@@ -74,16 +80,57 @@ export function TopBar({ onSearchOpen, onSettingsOpen }: TopBarProps) {
             </span>
           </button>
 
-          <button
-            type="button"
-            onClick={onSettingsOpen}
-            title="Open settings"
-            className="flex items-center bg-(--color-surface-container-lowest)/90 backdrop-blur-md p-1.5 rounded-full shadow-[0_4px_16px_-2px_rgba(23,25,28,0.05)] border border-(--color-surface-container-high) hover:border-(--color-primary) transition-colors"
-          >
-            <div className="w-8 h-8 rounded-full bg-(--color-primary) flex items-center justify-center">
-              <Icon name="settings" size={18} className="text-(--color-on-primary)" />
-            </div>
-          </button>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setMenu((v) => !v)}
+              title={user ? `${user.display_name} (@${user.username})` : 'Account'}
+              className="flex items-center bg-(--color-surface-container-lowest)/90 backdrop-blur-md p-1.5 rounded-full shadow-[0_4px_16px_-2px_rgba(23,25,28,0.05)] border border-(--color-surface-container-high) hover:border-(--color-primary) transition-colors"
+            >
+              <div className="w-8 h-8 rounded-full bg-(--color-primary) flex items-center justify-center font-family-geist text-[14px] font-bold text-(--color-on-primary) uppercase">
+                {user?.username.slice(0, 1) ?? <Icon name="settings" size={18} className="text-(--color-on-primary)" />}
+              </div>
+            </button>
+            {menu && (
+              <>
+                <button type="button" aria-label="Close menu" onClick={() => setMenu(false)} className="fixed inset-0 z-40 cursor-default" />
+                <div className="absolute right-0 mt-2 z-50 w-56 rounded-xl bg-(--color-surface-container-lowest) border border-(--color-surface-container-high) shadow-lg overflow-hidden">
+                  <div className="px-4 py-3 border-b border-(--color-surface-container-high)">
+                    <p className="font-family-geist text-[13px] font-semibold text-(--color-on-surface) capitalize">{user?.display_name}</p>
+                    <p className="font-family-inter text-[11px] text-(--color-secondary)">@{user?.username} · {user?.role}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { setMenu(false); navigate('/activity'); }}
+                    className="w-full flex items-center gap-2 px-4 py-2.5 font-family-geist text-[12px] text-(--color-on-surface) hover:bg-(--color-surface-container-low) transition-colors"
+                  >
+                    <Icon name="checklist" size={15} /> Activity
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setMenu(false); navigate('/users'); }}
+                    className="w-full flex items-center gap-2 px-4 py-2.5 font-family-geist text-[12px] text-(--color-on-surface) hover:bg-(--color-surface-container-low) transition-colors"
+                  >
+                    <Icon name="person" size={15} /> Users
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setMenu(false); onSettingsOpen(); }}
+                    className="w-full flex items-center gap-2 px-4 py-2.5 font-family-geist text-[12px] text-(--color-on-surface) hover:bg-(--color-surface-container-low) transition-colors"
+                  >
+                    <Icon name="settings" size={15} /> Settings{isAdmin ? '' : ' (admin only)'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setMenu(false); logout().then(() => navigate('/login')); }}
+                    className="w-full flex items-center gap-2 px-4 py-2.5 font-family-geist text-[12px] text-(--color-error) hover:bg-(--color-surface-container-low) transition-colors border-t border-(--color-surface-container-high)"
+                  >
+                    <Icon name="arrow_forward" size={15} /> Log out
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
     </header>

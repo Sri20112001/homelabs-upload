@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { filesApi } from '../api/files';
 import { formatBytes } from '../utils';
 import { useTheme, type ThemeFamily, type ThemeMode } from '../hooks/useTheme';
+import { useAuth } from '../hooks/useAuth';
 import { Icon } from '../components/ui/Icon';
 
 export interface ThemeOption {
@@ -62,8 +63,13 @@ export function SettingsPage() {
 
   // Destructure family and mode from the refactored useTheme hook
   const { family, mode, setFamily, setMode } = useTheme();
+  const { isAdmin } = useAuth();
 
   const loadAll = useCallback(async () => {
+    if (!isAdmin) {
+      setError('Runtime config is admin-only. Appearance settings below still work for everyone.');
+      return;
+    }
     try {
       const c = await filesApi.getConfig();
       setCfg(c);
@@ -71,7 +77,7 @@ export function SettingsPage() {
     } catch {
       setError('Failed to load settings');
     }
-  }, []);
+  }, [isAdmin]);
 
   useEffect(() => {
     loadAll();

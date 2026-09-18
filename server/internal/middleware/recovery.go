@@ -44,7 +44,7 @@ func Auth(a Authenticator) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if err := a.Authenticate(c); err != nil {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"error": gin.H{"code": "UNAUTHORIZED", "message": "Authentication required."},
+				"error": gin.H{"code": "UNAUTHORIZED", "message": "Please log in."},
 			})
 			return
 		}

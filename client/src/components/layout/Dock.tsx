@@ -18,6 +18,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: "dashboard", path: "/", icon: "dashboard", label: "Dashboard" },
   { id: "files", path: "files", icon: "folder", label: "Files" },
   { id: "search", path: "search", icon: "explore", label: "Search" },
+  { id: "activity", path: "activity", icon: "checklist", label: "Activity" },
   { id: "transfers", path: "transfers", icon: "sync_alt", label: "Transfers" },
 ];
 

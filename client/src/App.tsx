@@ -7,14 +7,33 @@ import { FilesPage } from './pages/FilesPage';
 import { SearchPage } from './pages/SearchPage';
 import { TransfersPage } from './pages/TransfersPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { LoginPage } from './pages/LoginPage';
+import { RegisterPage } from './pages/RegisterPage';
+import { ActivityPage } from './pages/ActivityPage';
+import { UsersPage } from './pages/UsersPage';
 import { UploadModal, TransferCenter } from './components/modals/UploadModal';
 import { CommandPalette } from './components/modals/CommandPalette';
 import { ShortcutsModal } from './components/ui/ShortcutsModal';
 import { OfflineBanner } from './components/ui/OfflineBanner';
 import { OnboardingTour, useOnboardingTour } from './components/ui/OnboardingTour';
 import { ToastProvider, useToast } from './components/ui/Toast';
+import { AuthProvider, useAuth } from './hooks/useAuth';
 import { useTransfers } from './hooks/useTransfers';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
+
+function RequireAuth({ children }: { children: React.ReactNode }) {
+  const { user, loading, setupNeeded } = useAuth();
+  if (loading) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-(--color-primary) border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+  // Empty database → first-run registration; otherwise login.
+  if (!user) return <Navigate to={setupNeeded ? '/register' : '/login'} replace />;
+  return <>{children}</>;
+}
 
 const AppInner = () => {
   const location = useLocation();
@@ -38,6 +57,7 @@ const AppInner = () => {
   const { toast } = useToast();
   const online = useOnlineStatus();
   const { show: showTour, dismiss: dismissTour } = useOnboardingTour();
+  const { user } = useAuth();
 
   const { transfers, enqueue, cancel, clearDone, activeCount } = useTransfers();
 
@@ -83,54 +103,65 @@ const AppInner = () => {
     toast(`Uploading ${files.length} file${files.length !== 1 ? 's' : ''}`, 'info');
   }, [enqueue, toast]);
 
+  const isAuthPage = location.pathname === '/login' || location.pathname === '/register';
+
   return (
     <div className="min-h-screen bg-canvas text-brand-highlight pb-28">
-      <TopBar onSearchOpen={() => setShowSearch(true)} onSettingsOpen={() => goPage('settings')} />
+      {!isAuthPage && user && <TopBar onSearchOpen={() => setShowSearch(true)} onSettingsOpen={() => goPage('settings')} />}
       <OfflineBanner online={online} />
 
       <main className="w-full pt-16 px-(--spacing-margin) md:px-(--spacing-margin-desktop)">
         <Routes>
-          {/* <Route path="/" element={<Navigate to="/dashboard" replace />} /> */}
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
           <Route
             path="/"
-            element={<DashboardPage onUpload={() => setShowUpload(true)} />}
+            element={<RequireAuth><DashboardPage onUpload={() => setShowUpload(true)} /></RequireAuth>}
           />
           <Route
             path="/files"
             element={
-              <FilesPage
-                path={filesPath}
-                onPathChange={(p) => setFilesPath(p)}
-                onUpload={() => setShowUpload(true)}
-                onEnqueueFiles={handleEnqueueFiles}
-              />
+              <RequireAuth>
+                <FilesPage
+                  path={filesPath}
+                  onPathChange={(p) => setFilesPath(p)}
+                  onUpload={() => setShowUpload(true)}
+                  onEnqueueFiles={handleEnqueueFiles}
+                />
+              </RequireAuth>
             }
           />
-          <Route path="/search" element={<SearchPage onNavigate={handleNavigate} />} />
+          <Route path="/search" element={<RequireAuth><SearchPage onNavigate={handleNavigate} /></RequireAuth>} />
           <Route
             path="/transfers"
             element={
-              <TransfersPage
-                transfers={transfers}
-                onCancel={cancel}
-                onClearDone={clearDone}
-                activeCount={activeCount}
-              />
+              <RequireAuth>
+                <TransfersPage
+                  transfers={transfers}
+                  onCancel={cancel}
+                  onClearDone={clearDone}
+                  activeCount={activeCount}
+                />
+              </RequireAuth>
             }
           />
-          <Route path="/settings" element={<SettingsPage />} />
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/activity" element={<RequireAuth><ActivityPage /></RequireAuth>} />
+          <Route path="/users" element={<RequireAuth><UsersPage /></RequireAuth>} />
+          <Route path="/settings" element={<RequireAuth><SettingsPage /></RequireAuth>} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
 
-      <Dock
-        activePage={page}
-        onNavigate={goPage}
-        onUpload={() => setShowUpload(true)}
-        transferCount={activeCount}
-      />
+      {!isAuthPage && user && (
+        <Dock
+          activePage={page}
+          onNavigate={goPage}
+          onUpload={() => setShowUpload(true)}
+          transferCount={activeCount}
+        />
+      )}
 
-      {page !== 'transfers' && transfers.length > 0 && (
+      {!isAuthPage && page !== 'transfers' && transfers.length > 0 && (
         <div className="fixed bottom-24 right-4 md:right-8 z-40 w-[calc(100vw-2rem)] max-w-120">
           <TransferCenter
             transfers={transfers}
@@ -141,21 +172,21 @@ const AppInner = () => {
         </div>
       )}
 
-      {showUpload && (
+      {showUpload && user && (
         <UploadModal
           destPath={filesPath}
           onClose={() => setShowUpload(false)}
           onEnqueue={handleEnqueue}
         />
       )}
-      {showSearch && (
+      {showSearch && user && (
         <CommandPalette
           onClose={() => setShowSearch(false)}
           onNavigate={handleNavigate}
         />
       )}
       {showShortcuts && <ShortcutsModal onClose={() => setShowShortcuts(false)} />}
-      {showTour && <OnboardingTour onDismiss={dismissTour} />}
+      {showTour && user && <OnboardingTour onDismiss={dismissTour} />}
     </div>
   );
 }
@@ -163,7 +194,9 @@ const AppInner = () => {
 export default function App() {
   return (
     <ToastProvider>
-      <AppInner />
+      <AuthProvider>
+        <AppInner />
+      </AuthProvider>
     </ToastProvider>
   );
 }

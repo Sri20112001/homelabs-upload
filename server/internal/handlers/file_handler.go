@@ -10,6 +10,8 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/gin-gonic/gin"
+	"github.com/homelab/filemanager/internal/activity"
+	"github.com/homelab/filemanager/internal/middleware"
 	"github.com/homelab/filemanager/internal/models"
 	"github.com/homelab/filemanager/internal/services"
 )
@@ -17,10 +19,30 @@ import (
 // FileHandler handles all HTTP concerns for file operations.
 type FileHandler struct {
 	svc *services.FileService
+	log *activity.Store
 }
 
-func NewFileHandler(svc *services.FileService) *FileHandler {
-	return &FileHandler{svc: svc}
+func NewFileHandler(svc *services.FileService, log *activity.Store) *FileHandler {
+	return &FileHandler{svc: svc, log: log}
+}
+
+func (h *FileHandler) actor(c *gin.Context) (username, role string) {
+	_, username, _, role = middleware.CurrentUser(c)
+	if username == "" {
+		username = "unknown"
+	}
+	return username, role
+}
+
+func (h *FileHandler) record(c *gin.Context, action, path, detail string, status int) {
+	if h.log == nil {
+		return
+	}
+	user, role := h.actor(c)
+	h.log.Log(activity.Entry{
+		User: user, Role: role, Action: action,
+		Path: path, Detail: detail, IP: c.ClientIP(), Status: status,
+	})
 }
 
 // ListDirectory  GET /api/files?path=
@@ -66,6 +88,7 @@ func (h *FileHandler) Download(c *gin.Context) {
 	mimeType := detectMIMEFromName(info.Name())
 	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, info.Name()))
 	c.Header("Content-Length", strconv.FormatInt(info.Size(), 10))
+	h.record(c, activity.ActionDownload, path, "", http.StatusOK)
 	c.DataFromReader(http.StatusOK, info.Size(), mimeType, f, nil)
 }
 
@@ -91,6 +114,7 @@ func (h *FileHandler) Upload(c *gin.Context) {
 		respondError(c, svcErr)
 		return
 	}
+	h.record(c, activity.ActionUpload, clientPath, fmt.Sprintf("%s (%d bytes) → %s", fh.Filename, fh.Size, destDir), http.StatusCreated)
 	c.JSON(http.StatusCreated, gin.H{"message": "file uploaded successfully", "path": clientPath})
 }
 
@@ -107,6 +131,7 @@ func (h *FileHandler) CreateDirectory(c *gin.Context) {
 		respondError(c, err)
 		return
 	}
+	h.record(c, activity.ActionMkdir, req.Path, "", http.StatusCreated)
 	c.JSON(http.StatusCreated, gin.H{"message": "directory created", "path": req.Path})
 }
 
@@ -124,6 +149,7 @@ func (h *FileHandler) Rename(c *gin.Context) {
 		respondError(c, err)
 		return
 	}
+	h.record(c, activity.ActionRename, req.Path, "→ "+req.NewName, http.StatusOK)
 	c.JSON(http.StatusOK, gin.H{"message": "renamed successfully"})
 }
 
@@ -141,6 +167,7 @@ func (h *FileHandler) Move(c *gin.Context) {
 		respondError(c, err)
 		return
 	}
+	h.record(c, activity.ActionMove, req.Source, "→ "+req.Destination, http.StatusOK)
 	c.JSON(http.StatusOK, gin.H{"message": "moved successfully"})
 }
 
@@ -158,6 +185,7 @@ func (h *FileHandler) Copy(c *gin.Context) {
 		respondError(c, err)
 		return
 	}
+	h.record(c, activity.ActionCopy, req.Source, "→ "+req.Destination, http.StatusOK)
 	c.JSON(http.StatusOK, gin.H{"message": "copied successfully"})
 }
 
@@ -175,6 +203,7 @@ func (h *FileHandler) Delete(c *gin.Context) {
 		respondError(c, err)
 		return
 	}
+	h.record(c, activity.ActionDelete, req.Path, "", http.StatusOK)
 	c.JSON(http.StatusOK, gin.H{"message": "deleted successfully"})
 }
 
@@ -222,6 +251,7 @@ func (h *FileHandler) ZipDownload(c *gin.Context) {
 	c.Header("Content-Type", "application/zip")
 	c.Header("Transfer-Encoding", "chunked")
 	c.Status(http.StatusOK)
+	h.record(c, activity.ActionZipDownload, "", fmt.Sprintf("%d items → %s", len(req.Paths), name), http.StatusOK)
 	if err := h.svc.ZipStream(c.Request.Context(), req.Paths, c.Writer); err != nil {
 		// Headers already sent; nothing we can do
 		_ = err
@@ -279,6 +309,7 @@ func (h *FileHandler) FinalizeChunk(c *gin.Context) {
 		respondError(c, err)
 		return
 	}
+	h.record(c, activity.ActionUpload, path, fmt.Sprintf("%s (chunked) → %s", req.Filename, req.DestDir), http.StatusCreated)
 	c.JSON(http.StatusCreated, gin.H{"message": "file assembled", "path": path})
 }
 
@@ -295,6 +326,7 @@ func (h *FileHandler) TrashMove(c *gin.Context) {
 		respondError(c, err)
 		return
 	}
+	h.record(c, activity.ActionTrashMove, req.Path, "", http.StatusOK)
 	c.JSON(http.StatusOK, gin.H{"message": "moved to trash"})
 }
 
@@ -321,6 +353,7 @@ func (h *FileHandler) TrashRestore(c *gin.Context) {
 		respondError(c, err)
 		return
 	}
+	h.record(c, activity.ActionTrashRestore, req.ID, "", http.StatusOK)
 	c.JSON(http.StatusOK, gin.H{"message": "restored"})
 }
 
@@ -330,6 +363,7 @@ func (h *FileHandler) TrashPurge(c *gin.Context) {
 		respondError(c, err)
 		return
 	}
+	h.record(c, activity.ActionTrashPurge, "", "trash purged", http.StatusOK)
 	c.JSON(http.StatusOK, gin.H{"message": "trash purged"})
 }
 
@@ -405,6 +439,7 @@ func (h *FileHandler) BulkRename(c *gin.Context) {
 		c.JSON(http.StatusMultiStatus, gin.H{"errors": errs})
 		return
 	}
+	h.record(c, activity.ActionBulkRename, "", fmt.Sprintf("%d items renamed", len(req.Renames)), http.StatusOK)
 	c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("%d items renamed", len(req.Renames))})
 }
 

@@ -74,3 +74,22 @@ export interface SortPrefs {
   dir: SortDir;
   view: ViewMode;
 }
+
+export interface AuthUser {
+  id: string;
+  username: string;
+  display_name: string;
+  role: 'admin' | 'member';
+  created_at?: string;
+}
+
+export interface ActivityEntry {
+  time: string;
+  user: string;
+  role?: string;
+  action: string;
+  path?: string;
+  detail?: string;
+  ip?: string;
+  status?: number;
+}

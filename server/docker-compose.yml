@@ -11,5 +11,7 @@ services:
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3456}
       API_KEY: ${API_KEY:-}
     volumes:
-      - ./data:/data/files
+      # Mount the parent so BOTH /data/files (uploads) and
+      # /data/.nodevault/nodevault.db (users, sessions, activity) persist.
+      - ./data:/data
     restart: unless-stopped

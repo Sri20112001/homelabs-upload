@@ -3,6 +3,11 @@ import { API_BASE_URL, CHUNK_SIZE } from '../config/app';
 
 const BASE = API_BASE_URL;
 
+// Auth rides on the HttpOnly nv_session cookie set at login.
+// credentials:'include' on every request so the browser sends it
+// (same-origin, and cross-origin when CORS allows credentials).
+const CRED: RequestCredentials = 'include';
+
 export class ApiError extends Error {
   code: string;
   status: number;
@@ -25,6 +30,12 @@ async function handleResponse<T>(res: Response): Promise<T> {
     } catch {
       // ignore parse errors
     }
+    if (res.status === 401 && code === 'UNAUTHORIZED') {
+      // Session expired / logged out elsewhere — bounce to login once.
+      if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+        window.location.assign('/login');
+      }
+    }
     throw new ApiError(code, message, res.status);
   }
   if (res.status === 204) return undefined as T;
@@ -33,12 +44,13 @@ async function handleResponse<T>(res: Response): Promise<T> {
 
 export const client = {
   get<T>(path: string, signal?: AbortSignal): Promise<T> {
-    return fetch(`${BASE}${path}`, { signal }).then(handleResponse<T>);
+    return fetch(`${BASE}${path}`, { credentials: CRED, signal }).then(handleResponse<T>);
   },
 
   post<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
     return fetch(`${BASE}${path}`, {
       method: 'POST',
+      credentials: CRED,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
       signal,
@@ -48,6 +60,7 @@ export const client = {
   patch<T>(path: string, body: unknown): Promise<T> {
     return fetch(`${BASE}${path}`, {
       method: 'PATCH',
+      credentials: CRED,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     }).then(handleResponse<T>);
@@ -56,6 +69,7 @@ export const client = {
   delete<T>(path: string, body: unknown): Promise<T> {
     return fetch(`${BASE}${path}`, {
       method: 'DELETE',
+      credentials: CRED,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     }).then(handleResponse<T>);
@@ -107,6 +121,7 @@ export const client = {
       const form = new FormData();
       form.append('file', file);
       xhr.open('POST', `${BASE}/files/upload?path=${encodeURIComponent(destPath)}`);
+      xhr.withCredentials = true;
       xhr.send(form);
     });
   },
@@ -128,7 +143,7 @@ export const client = {
       const chunk = file.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
       const res = await fetch(
         `${BASE}/files/chunk?upload_id=${encodeURIComponent(uploadId)}&index=${i}`,
-        { method: 'POST', body: chunk, signal },
+        { method: 'POST', credentials: CRED, body: chunk, signal },
       );
       if (!res.ok) throw new ApiError('INTERNAL_ERROR', `Chunk ${i} failed`, res.status);
       uploaded += chunk.size;
@@ -141,6 +156,7 @@ export const client = {
 
     const finalRes = await fetch(`${BASE}/files/chunk/finalize`, {
       method: 'POST',
+      credentials: CRED,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ upload_id: uploadId, dest_dir: destPath, filename: file.name }),
       signal,
