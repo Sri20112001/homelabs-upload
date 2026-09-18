@@ -1,0 +1,390 @@
+@import "tailwindcss";
+
+/* ── 1. Tailwind v4 Theme Bridge ── */
+/* Points all utility classes to runtime variables so mode/theme switches work dynamically */
+@theme {
+  /* Canonical tokens */
+  --color-canvas: var(--bg-canvas);
+  --color-surface: var(--bg-surface);
+  --color-accent: var(--accent-primary);
+  --color-neon: var(--accent-neon);
+  --color-ink: var(--text-primary);
+  --color-muted: var(--text-muted);
+  --color-border-subtle: var(--border-subtle);
+
+  /* Brand namespace */
+  --color-brand-canvas: var(--bg-canvas);
+  --color-brand-surface: var(--bg-surface);
+  --color-brand-depth: var(--border-subtle);
+  --color-brand-primary: var(--accent-primary);
+  --color-brand-neon: var(--accent-neon);
+  --color-brand-highlight: var(--text-brand-highlight);
+
+  /* Dynamic theme glow shadows */
+  --shadow-neon-glow: 0 0 20px -5px var(--glow-b);
+  --shadow-blue-glow: 0 0 25px -5px var(--glow-a);
+
+  /* Semantic UI Tokens */
+  --color-background: var(--bg-canvas);
+  --color-on-background: var(--text-primary);
+  --color-on-surface: var(--text-primary);
+  --color-on-surface-variant: var(--text-muted);
+  --color-inverse-surface: var(--text-primary);
+  --color-inverse-on-surface: var(--bg-canvas);
+  --color-outline: var(--text-muted);
+  --color-outline-variant: var(--border-subtle);
+  --color-surface-tint: var(--accent-primary);
+  --color-surface-container-lowest: var(--bg-canvas);
+  --color-surface-container-low: var(--bg-surface);
+  --color-surface-container: var(--bg-raised);
+  --color-surface-container-high: var(--border-subtle);
+  --color-surface-container-highest: var(--border-bright);
+  --color-primary: var(--accent-primary);
+  --color-on-primary: var(--text-on-accent);
+  --color-primary-container: var(--accent-neon);
+  --color-on-primary-container: var(--text-on-accent);
+  --color-primary-fixed: var(--accent-primary);
+  --color-on-primary-fixed: var(--text-on-accent);
+  --color-secondary: var(--text-muted);
+  --color-secondary-container: var(--border-subtle);
+  --color-on-secondary-fixed: var(--accent-neon);
+  --color-tertiary: var(--text-muted);
+  --color-error: var(--danger);
+  --color-on-error: var(--on-danger);
+  --color-error-container: var(--danger-container);
+  --color-on-error-container: var(--on-danger-container);
+
+  /* Layout & Fonts */
+  --radius-sm: 0.25rem;
+  --radius-DEFAULT: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.5rem;
+  --radius-full: 9999px;
+
+  --spacing-space-xs: 0.25rem;
+  --spacing-space-sm: 0.5rem;
+  --spacing-space-md: 0.75rem;
+  --spacing-space-lg: 1.25rem;
+  --spacing-space-xl: 2rem;
+  --spacing-margin: 1rem;
+  --spacing-margin-desktop: 2rem;
+  --spacing-gutter: 1rem;
+  --spacing-gutter-desktop: 1.5rem;
+
+  --font-family-geist: 'Geist', system-ui, sans-serif;
+  --font-family-inter: 'Inter', system-ui, sans-serif;
+}
+
+/* ── 2. Theme Token Definitions (Light & Dark Pairs) ── */
+
+/* ==========================================================================
+   THEME 1: NAVY / AZURE
+   ========================================================================== */
+
+/* Navy — Dark (Default) */
+:root,
+:root[data-theme='navy'],
+:root[data-theme='navy'][data-mode='dark'] {
+  --bg-canvas: #05043b;
+  --bg-surface: #0a084e;
+  --bg-raised: #100d6b;
+  --border-subtle: #161371;
+  --border-bright: #2a27a0;
+  --accent-primary: #0c86f4;
+  --accent-neon: #00d2fe;
+  --text-primary: #ece8ff;
+  --text-muted: #94a3b8;
+  --text-brand-highlight: #7dd3fc;
+  --text-on-accent: #ffffff;
+  --danger: #f87171;
+  --on-danger: #05043b;
+  --danger-container: #7f1d1d;
+  --on-danger-container: #fecaca;
+  --glass-bg: rgba(10, 8, 78, 0.72);
+  --glass-border: rgba(0, 210, 254, 0.2);
+  --glow-a: rgba(12, 134, 244, 0.4);
+  --glow-b: rgba(0, 210, 254, 0.35);
+  --selection: rgba(0, 210, 254, 0.3);
+  color-scheme: dark;
+}
+
+/* Navy — Light */
+:root[data-theme='navy'][data-mode='light'],
+:root[data-theme='navy-light'] {
+  --bg-canvas: #f0f4ff;
+  --bg-surface: #ffffff;
+  --bg-raised: #e0e9fe;
+  --border-subtle: #cbd7f6;
+  --border-bright: #93b2f5;
+  --accent-primary: #0266c8;
+  --accent-neon: #0098bd;
+  --text-primary: #05043b;
+  --text-muted: #475569;
+  --text-brand-highlight: #034994;
+  --text-on-accent: #ffffff;
+  --danger: #ba1a1a;
+  --on-danger: #ffffff;
+  --danger-container: #ffdad6;
+  --on-danger-container: #93000a;
+  --glass-bg: rgba(255, 255, 255, 0.8);
+  --glass-border: rgba(2, 102, 200, 0.18);
+  --glow-a: rgba(2, 102, 200, 0.2);
+  --glow-b: rgba(0, 152, 189, 0.15);
+  --selection: rgba(2, 102, 200, 0.2);
+  color-scheme: light;
+}
+
+/* ==========================================================================
+   THEME 2: EMERALD / CYBER JADE
+   ========================================================================== */
+
+/* Emerald — Dark */
+:root[data-theme='emerald'],
+:root[data-theme='emerald'][data-mode='dark'] {
+  --bg-canvas: #090d0b;
+  --bg-surface: #121814;
+  --bg-raised: #19221c;
+  --border-subtle: #1f2e23;
+  --border-bright: #2c4233;
+  --accent-primary: #00e575;
+  --accent-neon: #5cffba;
+  --text-primary: #f0fdf4;
+  --text-muted: #718274;
+  --text-brand-highlight: #4ade80;
+  --text-on-accent: #090d0b;
+  --danger: #f87171;
+  --on-danger: #090d0b;
+  --danger-container: #7f1d1d;
+  --on-danger-container: #fecaca;
+  --glass-bg: rgba(18, 24, 20, 0.72);
+  --glass-border: rgba(0, 229, 117, 0.22);
+  --glow-a: rgba(0, 229, 117, 0.35);
+  --glow-b: rgba(92, 255, 186, 0.3);
+  --selection: rgba(0, 229, 117, 0.3);
+  color-scheme: dark;
+}
+
+/* Emerald — Light */
+:root[data-theme='emerald'][data-mode='light'],
+:root[data-theme='emerald-light'] {
+  --bg-canvas: #f0fdf4;
+  --bg-surface: #ffffff;
+  --bg-raised: #dcfce7;
+  --border-subtle: #bbf7d0;
+  --border-bright: #4ade80;
+  --accent-primary: #059669;
+  --accent-neon: #00b85c;
+  --text-primary: #062414;
+  --text-muted: #3f624d;
+  --text-brand-highlight: #047857;
+  --text-on-accent: #ffffff;
+  --danger: #ba1a1a;
+  --on-danger: #ffffff;
+  --danger-container: #ffdad6;
+  --on-danger-container: #93000a;
+  --glass-bg: rgba(255, 255, 255, 0.8);
+  --glass-border: rgba(5, 150, 105, 0.18);
+  --glow-a: rgba(5, 150, 105, 0.2);
+  --glow-b: rgba(0, 184, 92, 0.15);
+  --selection: rgba(5, 150, 105, 0.2);
+  color-scheme: light;
+}
+
+/* ==========================================================================
+   THEME 3: AMBER / INDUSTRIAL OCHRE
+   ========================================================================== */
+
+/* Amber — Dark */
+:root[data-theme='amber'],
+:root[data-theme='amber'][data-mode='dark'] {
+  --bg-canvas: #121110;
+  --bg-surface: #1a1816;
+  --bg-raised: #25221f;
+  --border-subtle: #2e2a26;
+  --border-bright: #453f38;
+  --accent-primary: #f59e0b;
+  --accent-neon: #fbbf24;
+  --text-primary: #faf8f5;
+  --text-muted: #8a857d;
+  --text-brand-highlight: #fde047;
+  --text-on-accent: #121110;
+  --danger: #f87171;
+  --on-danger: #121110;
+  --danger-container: #7f1d1d;
+  --on-danger-container: #fecaca;
+  --glass-bg: rgba(26, 24, 22, 0.72);
+  --glass-border: rgba(251, 191, 36, 0.22);
+  --glow-a: rgba(245, 158, 11, 0.35);
+  --glow-b: rgba(251, 191, 36, 0.28);
+  --selection: rgba(245, 158, 11, 0.3);
+  color-scheme: dark;
+}
+
+/* Amber — Light */
+:root[data-theme='amber'][data-mode='light'],
+:root[data-theme='amber-light'] {
+  --bg-canvas: #fefce8;
+  --bg-surface: #ffffff;
+  --bg-raised: #fef08a;
+  --border-subtle: #fde047;
+  --border-bright: #d97706;
+  --accent-primary: #d97706;
+  --accent-neon: #b45309;
+  --text-primary: #291e0a;
+  --text-muted: #66563d;
+  --text-brand-highlight: #b45309;
+  --text-on-accent: #ffffff;
+  --danger: #ba1a1a;
+  --on-danger: #ffffff;
+  --danger-container: #ffdad6;
+  --on-danger-container: #93000a;
+  --glass-bg: rgba(255, 255, 255, 0.85);
+  --glass-border: rgba(217, 119, 6, 0.2);
+  --glow-a: rgba(217, 119, 6, 0.2);
+  --glow-b: rgba(180, 83, 9, 0.15);
+  --selection: rgba(217, 119, 6, 0.2);
+  color-scheme: light;
+}
+
+/* ==========================================================================
+   THEME 4: VIOLET / MINIMAL
+   ========================================================================== */
+
+/* Violet — Dark */
+:root[data-theme='violet'],
+:root[data-theme='violet'][data-mode='dark'] {
+  --bg-canvas: #0e0a17;
+  --bg-surface: #161124;
+  --bg-raised: #211936;
+  --border-subtle: #312550;
+  --border-bright: #493875;
+  --accent-primary: #8b5cf6;
+  --accent-neon: #c084fc;
+  --text-primary: #f5f3ff;
+  --text-muted: #948aa8;
+  --text-brand-highlight: #ddd6fe;
+  --text-on-accent: #ffffff;
+  --danger: #f87171;
+  --on-danger: #0e0a17;
+  --danger-container: #7f1d1d;
+  --on-danger-container: #fecaca;
+  --glass-bg: rgba(22, 17, 36, 0.72);
+  --glass-border: rgba(139, 92, 246, 0.22);
+  --glow-a: rgba(139, 92, 246, 0.35);
+  --glow-b: rgba(192, 132, 252, 0.28);
+  --selection: rgba(139, 92, 246, 0.3);
+  color-scheme: dark;
+}
+
+/* Violet — Light */
+:root[data-theme='violet'][data-mode='light'],
+:root[data-theme='violet-light'],
+:root[data-theme='light'] {
+  --bg-canvas: #f8f9fa;
+  --bg-surface: #ffffff;
+  --bg-raised: #ede9fe;
+  --border-subtle: #e4e7eb;
+  --border-bright: #d5dae0;
+  --accent-primary: #7c3aed;
+  --accent-neon: #4c1d95;
+  --text-primary: #0f172a;
+  --text-muted: #64748b;
+  --text-brand-highlight: #6d28d9;
+  --text-on-accent: #ffffff;
+  --danger: #ba1a1a;
+  --on-danger: #ffffff;
+  --danger-container: #ffdad6;
+  --on-danger-container: #93000a;
+  --glass-bg: rgba(255, 255, 255, 0.7);
+  --glass-border: rgba(124, 58, 237, 0.18);
+  --glow-a: rgba(124, 58, 237, 0.25);
+  --glow-b: rgba(76, 29, 149, 0.18);
+  --selection: rgba(124, 58, 237, 0.2);
+  color-scheme: light;
+}
+
+/* ── 3. Base Layers ── */
+@layer base {
+  html, body {
+    margin: 0;
+    padding: 0;
+    background-color: var(--bg-canvas);
+    color: var(--text-primary);
+    font-family: var(--font-family-inter);
+    -webkit-font-smoothing: antialiased;
+    overscroll-behavior: none;
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+
+  ::-webkit-scrollbar { display: none; }
+  * { scrollbar-width: none; }
+
+  #root {
+    width: 100%;
+    min-height: 100svh;
+    background-color: var(--bg-canvas);
+  }
+
+  ::selection {
+    background: var(--selection);
+  }
+
+  option, optgroup {
+    background-color: var(--bg-surface);
+    color: var(--text-primary);
+  }
+
+  input, select, textarea {
+    color-scheme: inherit;
+  }
+}
+
+/* ── 4. Components ── */
+@layer components {
+  /* Dynamic Primary Action Button */
+  .btn-primary {
+    background-image: linear-gradient(135deg, var(--accent-primary), var(--accent-neon));
+    color: var(--text-on-accent);
+    font-weight: 600;
+    transition: filter 0.15s ease, box-shadow 0.15s ease;
+  }
+  .btn-primary:hover {
+    filter: brightness(1.08);
+    box-shadow: 0 0 25px -5px var(--glow-a), 0 0 20px -5px var(--glow-b);
+  }
+
+  /* Secondary Action Button */
+  .btn-secondary {
+    background: transparent;
+    border: 1px solid var(--border-subtle);
+    color: var(--text-primary);
+    transition: border-color 0.15s ease;
+  }
+  .btn-secondary:hover {
+    border-color: var(--accent-neon);
+  }
+
+  /* Floating Glass Panels & Cards */
+  .glass-panel {
+    background: var(--glass-bg);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-border);
+  }
+
+  /* Status Tags / Micro-badges */
+  .neon-tag {
+    border: 1px solid var(--glass-border);
+    color: var(--accent-neon);
+    box-shadow: 0 0 20px -5px var(--glow-b);
+  }
+}
+
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 20;
+  user-select: none;
+}
+.material-symbols-filled {
+  font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+}

@@ -1,0 +1,14 @@
+services:
+  backend:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      SERVER_HOST: 0.0.0.0
+      SERVER_PORT: 8080
+      STORAGE_ROOT: /data/files
+      MAX_UPLOAD_SIZE: 10737418240
+      CORS_ORIGIN: http://localhost:5173
+      API_KEY: ""
+    volumes:
+      - ./data:/data/files

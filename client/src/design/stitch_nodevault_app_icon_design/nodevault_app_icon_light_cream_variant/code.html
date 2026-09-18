@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <!-- Background Gradient -->
+    <linearGradient id="lightBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFDF7" />
+      <stop offset="50%" stop-color="#FFF7EB" />
+      <stop offset="100%" stop-color="#FCEFD8" />
+    </linearGradient>
+
+    <!-- Dual Rose & Slate Stroke Gradients -->
+    <linearGradient id="roseGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#E14B77" />
+      <stop offset="100%" stop-color="#CC3A63" />
+    </linearGradient>
+
+    <linearGradient id="slateGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4B7BAF" />
+      <stop offset="100%" stop-color="#3368A0" />
+    </linearGradient>
+
+    <radialGradient id="lightGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#CC3A63" stop-opacity="0.08" />
+      <stop offset="60%" stop-color="#3368A0" stop-opacity="0.04" />
+      <stop offset="100%" stop-color="#FFF7EB" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+
+  <!-- App Icon Squircle Base -->
+  <rect x="32" y="32" width="960" height="960" rx="224" ry="224" fill="url(#lightBg)" stroke="#F0E3D0" stroke-width="2" />
+
+  <!-- Subtle Ambient Glow -->
+  <circle cx="512" cy="512" r="380" fill="url(#lightGlow)" />
+
+  <!-- Center Emblem Group -->
+  <g id="vault-folder-emblem-light">
+    <!-- Outer Hexagonal Vault Dial Ring in Slate & Rose -->
+    <polygon points="512,252 737,382 737,642 512,772 287,642 287,382"
+             fill="none"
+             stroke="url(#slateGrad)"
+             stroke-width="14"
+             stroke-linejoin="round" />
+
+    <!-- Hexagon Inner Concentric Track -->
+    <polygon points="512,284 710,398 710,626 512,740 314,626 314,398"
+             fill="none"
+             stroke="#CC3A63"
+             stroke-opacity="0.35"
+             stroke-width="4"
+             stroke-dasharray="16 12"
+             stroke-linejoin="round" />
+
+    <!-- Vault Dial Notches at Hexagon Vertices & Midpoints -->
+    <circle cx="512" cy="252" r="7" fill="#CC3A63" />
+    <circle cx="737" cy="382" r="7" fill="#CC3A63" />
+    <circle cx="737" cy="642" r="7" fill="#CC3A63" />
+    <circle cx="512" cy="772" r="7" fill="#CC3A63" />
+    <circle cx="287" cy="642" r="7" fill="#CC3A63" />
+    <circle cx="287" cy="382" r="7" fill="#CC3A63" />
+
+    <!-- Secondary Vault Gear Teeth -->
+    <line x1="512" y1="218" x2="512" y2="238" stroke="#3368A0" stroke-width="8" stroke-linecap="round" />
+    <line x1="766" y1="365" x2="749" y2="375" stroke="#3368A0" stroke-width="8" stroke-linecap="round" />
+    <line x1="766" y1="659" x2="749" y2="649" stroke="#3368A0" stroke-width="8" stroke-linecap="round" />
+    <line x1="512" y1="806" x2="512" y2="786" stroke="#3368A0" stroke-width="8" stroke-linecap="round" />
+    <line x1="258" y1="659" x2="275" y2="649" stroke="#3368A0" stroke-width="8" stroke-linecap="round" />
+    <line x1="258" y1="365" x2="275" y2="375" stroke="#3368A0" stroke-width="8" stroke-linecap="round" />
+
+    <!-- Minimalist Folder Silhouette in Light Palette -->
+    <path d="M 374,420 
+             L 446,420 
+             L 480,456 
+             L 650,456 
+             C 662,456 670,465 670,476 
+             L 670,612 
+             C 670,624 662,634 650,634 
+             L 374,634 
+             C 362,634 354,624 354,612 
+             L 354,442 
+             C 354,430 362,420 374,420 Z"
+          fill="#FFF2DF"
+          fill-opacity="0.85"
+          stroke="url(#roseGrad)"
+          stroke-width="12"
+          stroke-linejoin="round" />
+
+    <!-- Folder Front Crease -->
+    <path d="M 354,496 L 670,496"
+          stroke="#CC3A63"
+          stroke-width="6"
+          stroke-opacity="0.35" />
+
+    <!-- Central Vault Dial Wheel in Slate -->
+    <circle cx="512" cy="552" r="54"
+            fill="#FFF7EB"
+            stroke="url(#slateGrad)"
+            stroke-width="9" />
+
+    <!-- Vault Wheel Cross Pins -->
+    <circle cx="512" cy="552" r="18" fill="#CC3A63" />
+    <line x1="512" y1="510" x2="512" y2="534" stroke="#3368A0" stroke-width="6" stroke-linecap="round" />
+    <line x1="512" y1="570" x2="512" y2="594" stroke="#3368A0" stroke-width="6" stroke-linecap="round" />
+    <line x1="470" y1="552" x2="494" y2="552" stroke="#3368A0" stroke-width="6" stroke-linecap="round" />
+    <line x1="530" y1="552" x2="554" y2="552" stroke="#3368A0" stroke-width="6" stroke-linecap="round" />
+
+    <!-- Keyhole Center Dot -->
+    <circle cx="512" cy="552" r="5" fill="#FFF7EB" />
+  </g>
+</svg>

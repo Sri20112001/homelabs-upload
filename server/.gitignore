@@ -1,0 +1,6 @@
+.env
+*.tmp
+data/
+tmp/
+build-errors.log
+*.log
