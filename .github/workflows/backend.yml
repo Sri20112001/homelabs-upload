@@ -98,7 +98,7 @@ jobs:
             docker compose down --remove-orphans >/dev/null 2>&1 || true
             # A leftover twin (same image, different project path) also blocks
             # the port — safe to remove since we rebuild it below.
-            HOLDER="$(docker ps --format '{{.Names}} {{.Image}} {{.Ports}}' 2>/dev/null | grep '8080->8080' || true)"
+            HOLDER="$(docker ps --format '{{.Names}} {{.Image}} {{.Ports}}' 2>/dev/null | grep '8081->8080' || true)"
             if [ -n "$HOLDER" ]; then
               echo "port holder: $HOLDER"
               IMG="$(echo "$HOLDER" | awk '{print $2}')"
@@ -116,9 +116,9 @@ jobs:
             fi
             # Host (non-docker) process check — needs no sudo for own processes.
             if command -v ss >/dev/null 2>&1; then
-              HP="$(ss -tlnp 2>/dev/null | grep ':8080 ' || true)"
+              HP="$(ss -tlnp 2>/dev/null | grep ':8081 ' || true)"
               if [ -n "$HP" ]; then
-                echo "::error::host port 8080 is held by a host process (not docker):"
+                echo "::error::host port 8081 is held by a host process (not docker):"
                 echo "$HP"
                 echo "Stop it (e.g. kill <pid> / systemctl stop <service>), then re-run."
                 exit 1
@@ -127,4 +127,4 @@ jobs:
             docker compose up -d
             docker image prune -f
             sleep 8
-            curl -f http://localhost:8080/health
+            curl -f http://localhost:8081/health
