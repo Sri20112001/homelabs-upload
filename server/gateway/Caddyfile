@@ -1,0 +1,35 @@
+# NodeVault gateway — one domain, many projects.
+# Each handle_path strips its prefix, so backends see their native routes
+# (/health, /api/*) with zero code changes.
+
+{
+  # No TLS here yet — front with Cloudflare or add a domain + email for ACME.
+  admin off
+}
+
+:80 {
+  # Project A — NodeVault backend (same compose network)
+  handle_path /nodevault/* {
+    reverse_proxy backend:8080
+  }
+
+  # Gateway self-check (proves the proxy itself is up)
+  handle /healthz {
+    respond "gateway ok" 200
+  }
+
+  # ── Project B template ──────────────────────────────
+  # 1. run project B so it listens on host port 3000
+  #    (or add it to this compose file as another service)
+  # 2. uncomment, reload: docker compose up -d gateway
+  #
+  # handle_path /blog/* {
+  #   reverse_proxy host.docker.internal:3000
+  # }
+  # ────────────────────────────────────────────────────
+
+  # Default: everything else → NodeVault (keeps bare-domain use working)
+  handle {
+    reverse_proxy backend:8080
+  }
+}

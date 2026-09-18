@@ -128,3 +128,6 @@ jobs:
             docker image prune -f
             sleep 8
             curl -f http://localhost:8081/health
+            # Gateway: same backend through the /nodevault prefix
+            curl -f http://localhost:80/nodevault/health
+            curl -f http://localhost:80/healthz
