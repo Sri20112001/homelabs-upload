@@ -10,9 +10,13 @@ export default defineConfig({
     babel({ presets: [reactCompilerPreset()] }),
   ],
   server: {
+    // DEV ONLY — Vite strips `server` from production builds, so none of
+    // this ships to Vercel. Prod API base comes from VITE_API_URL
+    // (src/config/app.ts). Targets match local `air` defaults (:8080).
     proxy: {
       '/api': 'http://localhost:8080',
       '/health': 'http://localhost:8080',
+      '/metrics': 'http://localhost:8080',
     },
     port: 3456,
     host: true,

@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/homelab/filemanager/internal/activity"
@@ -115,5 +116,31 @@ func New(cfg *config.Config) *gin.Engine {
 		v1.PATCH("/config", middleware.RequireAdmin(), ch.PatchConfig)
 	}
 
+	serveSPA(r)
+
 	return r
+}
+
+// serveSPA serves the built frontend (./dist, baked into the image) so one
+// origin hosts UI + API: no CORS, no mixed-content. API/health/metrics
+// routes above take precedence. Anything else serves index.html (SPA
+// fallback); unknown /api/* paths stay JSON 404s. Skipped when ./dist is
+// absent (e.g. local `go run` dev — API-only mode).
+func serveSPA(r *gin.Engine) {
+	if _, err := os.Stat("./dist/index.html"); err != nil {
+		return
+	}
+	r.NoRoute(func(c *gin.Context) {
+		p := c.Request.URL.Path
+		if strings.HasPrefix(p, "/api/") {
+			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+			return
+		}
+		fp := filepath.Join("./dist", filepath.Clean("/"+p))
+		if fi, err := os.Stat(fp); err == nil && !fi.IsDir() {
+			c.File(fp)
+			return
+		}
+		c.File("./dist/index.html")
+	})
 }

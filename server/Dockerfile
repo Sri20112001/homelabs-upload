@@ -1,19 +1,32 @@
-# ── Build stage ──────────────────────────────────────────────────────────────
+# NOTE: build context is the REPO ROOT (see docker-compose `build.context`).
+# ── Frontend stage ─────────────────────────────────────────────────────────
+FROM node:22-alpine AS frontend
+
+WORKDIR /app/client
+COPY client/package.json client/package-lock.json ./
+RUN npm ci
+COPY client/ ./
+# No VITE_API_URL here on purpose: same-origin serving uses relative /api.
+RUN npm run build
+
+# ── Backend build stage ────────────────────────────────────────────────────
 FROM golang:1.26-alpine AS builder
 
-WORKDIR /app
-COPY go.mod go.sum ./
+WORKDIR /src/server
+COPY server/go.mod server/go.sum ./
 RUN go mod download
 
-COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o filemanager ./cmd/server
+COPY server/ ./
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /app/filemanager ./cmd/server
 
-# ── Runtime stage ─────────────────────────────────────────────────────────────
+# ── Runtime stage ──────────────────────────────────────────────────────────
 FROM alpine:3.20
 
 RUN apk add --no-cache ca-certificates curl
 
-COPY --from=builder /app/filemanager /filemanager
+COPY --from=builder /app/filemanager /app/filemanager
+COPY --from=frontend /app/client/dist /app/dist
+WORKDIR /app
 
 EXPOSE 8080
 VOLUME ["/data/files"]
@@ -21,4 +34,4 @@ VOLUME ["/data/files"]
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD curl -f http://localhost:8080/health || exit 1
 
-ENTRYPOINT ["/filemanager"]
+ENTRYPOINT ["/app/filemanager"]

@@ -1,6 +1,9 @@
 services:
   backend:
-    build: .
+    # Context is the repo root so the image bakes BOTH backend and frontend.
+    build:
+      context: ..
+      dockerfile: ./server/Dockerfile
     # Host port 8081: the server already runs a root-owned node service on 8080.
     # Container still listens on 8080 internally (Dockerfile healthcheck unchanged).
     ports:

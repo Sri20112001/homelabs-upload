@@ -63,18 +63,20 @@ jobs:
           echo "All deploy secrets present."
 
       # Ship the exact tested commit to the server as a tarball (excludes
-      # runtime state: data/, tmp/, .env). No git or tokens needed server-side.
-      - name: Sync backend to server
+      # runtime state, secrets and toolchains). No git or tokens needed
+      # server-side. Backend + frontend both included: the Docker image
+      # bakes the SPA (repo-root build context).
+      - name: Sync code to server
         run: |
           set -e
           mkdir -p ~/.ssh
           printf '%s\n' "${{ secrets.SERVER_SSH_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           SSH="ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p ${{ secrets.SERVER_PORT || 22 }}"
-          DEST="${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:${{ secrets.SERVER_PATH }}/server"
-          $SSH "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}" "mkdir -p '${{ secrets.SERVER_PATH }}/server'"
-          tar -C server --exclude=./data --exclude=./tmp --exclude=.env --exclude=./build-errors.log -czf - . \
-            | $SSH "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}" "tar -C '${{ secrets.SERVER_PATH }}/server' -xzf -"
+          HOST="${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}"
+          $SSH "$HOST" "mkdir -p '${{ secrets.SERVER_PATH }}'"
+          tar --exclude=./.git --exclude=./server/data --exclude=./server/tmp --exclude=./server/.env --exclude=./server/build-errors.log --exclude=./client/node_modules --exclude=./client/dist --exclude=./client/.env --exclude=./client/.env.local -czf - server client \
+            | $SSH "$HOST" "tar -C '${{ secrets.SERVER_PATH }}' -xzf -"
           rm -f ~/.ssh/deploy_key
           echo "sync done"
 
@@ -128,6 +130,8 @@ jobs:
             docker image prune -f
             sleep 8
             curl -f http://localhost:8081/health
+            # SPA served by the backend itself (same origin, no CORS involved)
+            curl -s http://localhost:8081/ | grep -q "NodeVault"
             # Gateway (host 8888 — :80 belongs to Apache): same backend
             # through the /nodevault prefix, plus the gateway self-check.
             curl -f http://localhost:8888/nodevault/health
