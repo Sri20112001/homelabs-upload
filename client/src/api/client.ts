@@ -32,8 +32,9 @@ async function handleResponse<T>(res: Response): Promise<T> {
     }
     if (res.status === 401 && code === 'UNAUTHORIZED') {
       // Session expired / logged out elsewhere — bounce to login once.
-      if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
-        window.location.assign('/login');
+      if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
+        const base = import.meta.env.BASE_URL === '/' ? '' : import.meta.env.BASE_URL.replace(/\/$/, '');
+        window.location.assign(`${base}/login`);
       }
     }
     throw new ApiError(code, message, res.status);
