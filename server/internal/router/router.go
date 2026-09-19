@@ -126,15 +126,33 @@ func New(cfg *config.Config) *gin.Engine {
 // routes above take precedence. Anything else serves index.html (SPA
 // fallback); unknown /api/* paths stay JSON 404s. Skipped when ./dist is
 // absent (e.g. local `go run` dev — API-only mode).
+//
+// APP_BASE_PATH (e.g. "/nodevault") serves the UI under a subpath so one
+// domain can front several projects. Only static assets/routes move — the
+// API intentionally stays at root /api in every mode (direct, gateway with
+// prefix-stripping, Vercel), so no client or proxy changes are ever needed
+// for API calls. With a base set, "/" redirects to it.
 func serveSPA(r *gin.Engine) {
 	if _, err := os.Stat("./dist/index.html"); err != nil {
 		return
 	}
+	base := strings.TrimSuffix(os.Getenv("APP_BASE_PATH"), "/")
 	r.NoRoute(func(c *gin.Context) {
 		p := c.Request.URL.Path
 		if strings.HasPrefix(p, "/api/") {
 			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 			return
+		}
+		if base != "" {
+			if p == "/" {
+				c.Redirect(http.StatusFound, base+"/")
+				return
+			}
+			if p == base {
+				p = "/"
+			} else if strings.HasPrefix(p, base+"/") {
+				p = p[len(base):]
+			}
 		}
 		fp := filepath.Join("./dist", filepath.Clean("/"+p))
 		if fi, err := os.Stat(fp); err == nil && !fi.IsDir() {

@@ -132,8 +132,10 @@ jobs:
             docker image prune -f
             sleep 8
             curl -f http://localhost:8081/health
-            # SPA served by the backend itself (same origin, no CORS involved)
-            curl -s http://localhost:8081/ | grep -q "NodeVault"
+            # SPA served by the backend itself (same origin, no CORS involved):
+            # root redirects to the subpath, subpath serves the shell.
+            test "$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' http://localhost:8081/)" = "302 /nodevault/"
+            curl -s http://localhost:8081/nodevault/ | grep -q "NodeVault"
             # Gateway (host 8888 — :80 belongs to Apache): same backend
             # through the /nodevault prefix, plus the gateway self-check.
             curl -f http://localhost:8888/nodevault/health

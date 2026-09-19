@@ -3,7 +3,19 @@ import babel from '@rolldown/plugin-babel'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig } from 'vite'
 
+// Subpath hosting (e.g. /nodevault) for sharing one domain between projects.
+// APP_BASE_PATH is read at BUILD time only; local `npm run dev` and Vercel
+// leave it unset and serve from root. The backend mirrors it at runtime via
+// the same variable (see router serveSPA + docker-compose).
+const appBasePath = (() => {
+  const p = (process.env.APP_BASE_PATH ?? '').trim();
+  if (!p || p === '/') return '/';
+  const s = p.startsWith('/') ? p : `/${p}`;
+  return s.endsWith('/') ? s : `${s}/`;
+})();
+
 export default defineConfig({
+  base: appBasePath,
   plugins: [
     tailwindcss(),
     react(),

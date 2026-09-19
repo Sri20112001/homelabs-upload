@@ -2,11 +2,13 @@
 # ── Frontend stage ─────────────────────────────────────────────────────────
 FROM node:22-alpine AS frontend
 
+# Subpath the UI is served under ("" = domain root). No VITE_API_URL here on
+# purpose: same-origin serving uses root-absolute /api.
+ARG APP_BASE_PATH=/nodevault/
 WORKDIR /app/client
 COPY client/package.json client/package-lock.json ./
 RUN npm ci
 COPY client/ ./
-# No VITE_API_URL here on purpose: same-origin serving uses relative /api.
 RUN npm run build
 
 # ── Backend build stage ────────────────────────────────────────────────────

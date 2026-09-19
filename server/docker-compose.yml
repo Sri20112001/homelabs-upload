@@ -1,9 +1,13 @@
 services:
   backend:
     # Context is the repo root so the image bakes BOTH backend and frontend.
+    # APP_BASE_PATH serves the UI under a subpath (e.g. /nodevault) so one
+    # domain can front several projects; "" restores domain-root serving.
     build:
       context: ..
       dockerfile: ./server/Dockerfile
+      args:
+        APP_BASE_PATH: ${APP_BASE_PATH:-/nodevault/}
     # Host port 8081: the server already runs a root-owned node service on 8080.
     # Container still listens on 8080 internally (Dockerfile healthcheck unchanged).
     ports:
@@ -15,6 +19,7 @@ services:
       MAX_UPLOAD_SIZE: ${MAX_UPLOAD_SIZE:-10737418240}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3456}
       API_KEY: ${API_KEY:-}
+      APP_BASE_PATH: ${APP_BASE_PATH:-/nodevault/}
     volumes:
       # Mount the parent so BOTH /data/files (uploads) and
       # /data/.nodevault/nodevault.db (users, sessions, activity) persist.

@@ -9,9 +9,14 @@ import { getStoredFamily, getStoredMode } from "./hooks/useTheme";
 document.documentElement.dataset.theme = getStoredFamily();
 document.documentElement.dataset.mode = getStoredMode();
 
+// import.meta.env.BASE_URL mirrors vite `base` (always trailing slash).
+// Strip it for the router, whose basename wants no trailing slash.
+const basename =
+  import.meta.env.BASE_URL === "/" ? undefined : import.meta.env.BASE_URL.replace(/\/$/, "");
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <BrowserRouter>
+    <BrowserRouter basename={basename}>
       <App />
     </BrowserRouter>
   </StrictMode>,

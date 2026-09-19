@@ -3,10 +3,12 @@
  * Change these in ONE place — or via environment (.env / Vercel dashboard).
  *
  * Deployment:
- *   - Local dev / same-origin prod → leave VITE_API_URL empty (uses /api/v1,
- *     served by the Vite dev proxy or the same host in production).
- *   - Vercel frontend + external backend → set VITE_API_URL to the backend
- *     origin, e.g. https://api.example.com  (Vercel env var, redeploy after).
+ *   - Local dev / same-origin prod → leave VITE_API_URL empty. API calls go
+ *     to root-absolute /api, which works from ANY page path (/, /files,
+ *     /nodevault/files) and through prefix-stripping gateways.
+ *   - Split hosting (e.g. Vercel) → set VITE_API_URL to the backend origin,
+ *     e.g. https://api.example.com (include any gateway prefix yourself,
+ *     e.g. https://host/nodevault). Vercel env var, redeploy after.
  */
 
 const apiOrigin = (import.meta.env.VITE_API_URL as string | undefined ?? "")
@@ -18,11 +20,13 @@ export const API_ORIGIN = apiOrigin;
 
 /**
  * Fully-qualified API root, e.g. "/api" or "https://api.example.com/api".
+ * Always root-absolute when same-origin: the backend serves /api at the
+ * domain root in every mode (direct, subpath, gateway).
  * Must match the backend route group (server/internal/router/router.go).
  */
 export const API_BASE_URL = `${apiOrigin}/api`;
 
-/** Prometheus-style metrics endpoint (same host as the API). */
+/** Prometheus-style metrics endpoint (always domain-root absolute). */
 export const METRICS_URL = `${apiOrigin}/metrics`;
 
 export const APP_NAME = "NodeVault";
