@@ -1,12 +1,3 @@
-# Secrets (repo Settings → Secrets and variables → Actions → Secrets tab):
-#   SERVER_HOST    server IP, bare — from `hostname -I` on the server
-#   SERVER_USER    SSH login — must equal `whoami` on the server
-#   SERVER_SSH_KEY private key whose .pub line is in ~/.ssh/authorized_keys
-#                  (verify with: grep -c "<unique-mid-key-fragment>" ~/.ssh/authorized_keys)
-#   SERVER_PATH    app dir on server, e.g. /home/<user>/homelabs-upload
-#                  (created automatically; code is synced as a tarball —
-#                  no git clone needed on the server)
-# First-time server setup is scripted: DEPLOY_PUBKEY='...' bash server/provision.sh
 name: backend CI/CD
 
 on:
@@ -33,8 +24,6 @@ jobs:
           go-version-file: server/go.mod
           cache: true
           cache-dependency-path: server/go.sum
-      # setup-go caches modules only — persist the *build* cache too,
-      # otherwise every run recompiles the world from scratch.
       - uses: actions/cache@v4
         with:
           path: ~/.cache/go-build
@@ -47,97 +36,53 @@ jobs:
   deploy:
     name: deploy to server
     needs: test
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
+      - name: Fix workspace permissions
+        run: docker run --rm -v $PWD:/app alpine sh -c "chown -R $(id -u):$(id -g) /app" || true
+      
       - uses: actions/checkout@v4
 
-      - name: Validate deploy secrets
-        run: |
-          fail=0
-          [ -z "${{ secrets.SERVER_HOST }}" ] && { echo "::error::Missing repository secret SERVER_HOST (server IP/hostname)"; fail=1; }
-          [ -z "${{ secrets.SERVER_USER }}" ] && { echo "::error::Missing repository secret SERVER_USER (SSH username)"; fail=1; }
-          [ -z "${{ secrets.SERVER_SSH_KEY }}" ] && { echo "::error::Missing repository secret SERVER_SSH_KEY (private key)"; fail=1; }
-          [ -z "${{ secrets.SERVER_PATH }}" ] && { echo "::error::Missing repository secret SERVER_PATH (repo dir on server)"; fail=1; }
-          if [ $fail -ne 0 ]; then
-            echo "::error::Add them under repo Settings → Secrets and variables → Actions → Secrets tab (NOT Variables tab), then re-run."
-            exit 1
-          fi
-          echo "All deploy secrets present."
-
-      # Ship the exact tested commit to the server as a tarball (excludes
-      # runtime state, secrets and toolchains). No git or tokens needed
-      # server-side. Backend + frontend both included: the Docker image
-      # bakes the SPA (repo-root build context).
-      - name: Sync code to server
+      - name: Build and Deploy
         run: |
           set -e
-          mkdir -p ~/.ssh
-          printf '%s\n' "${{ secrets.SERVER_SSH_KEY }}" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          SSH="ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p ${{ secrets.SERVER_PORT || 22 }}"
-          HOST="${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}"
-          $SSH "$HOST" "mkdir -p '${{ secrets.SERVER_PATH }}'"
-          tar --exclude=./.git --exclude=./server/data --exclude=./server/tmp --exclude=./server/.env --exclude=./server/build-errors.log --exclude=./client/node_modules --exclude=./client/dist --exclude=./client/.env --exclude=./client/.env.local --exclude=./client/src/design -czf - server client .dockerignore \
-            | $SSH "$HOST" "tar -C '${{ secrets.SERVER_PATH }}' -xzf -"
-          rm -f ~/.ssh/deploy_key
-          echo "sync done"
-
-      - name: Deploy over SSH
-        uses: appleboy/ssh-action@v1
-        env:
-          REPO_DIR: ${{ secrets.SERVER_PATH }}
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          port: ${{ secrets.SERVER_PORT || 22 }}
-          envs: REPO_DIR
-          script: |
-            set -e
-            cd "$REPO_DIR/server"
-            docker compose build
-            # Stop our own stale containers first (same project recreates cleanly).
-            docker compose down --remove-orphans >/dev/null 2>&1 || true
-            # Stop our own stale containers first (same project recreates cleanly).
-            docker compose down --remove-orphans >/dev/null 2>&1 || true
-            # A leftover twin (same image, different project path) also blocks
-            # the port — safe to remove since we rebuild it below.
-            HOLDER="$(docker ps --format '{{.Names}} {{.Image}} {{.Ports}}' 2>/dev/null | grep '8081->8080' || true)"
-            if [ -n "$HOLDER" ]; then
-              echo "port holder: $HOLDER"
-              IMG="$(echo "$HOLDER" | awk '{print $2}')"
-              if [ "$IMG" = "server-backend" ] || [ "$IMG" = "docker.io/library/server-backend" ]; then
-                NAME="$(echo "$HOLDER" | awk '{print $1}')"
-                echo "stale own image container ($NAME) — stopping and removing"
-                docker stop "$NAME" >/dev/null
-                docker rm "$NAME" >/dev/null
-              else
-                echo "::error::host port 8080 is held by a foreign container:"
-                echo "$HOLDER"
-                echo "Stop it (docker stop <name>) or move our port, then re-run."
-                exit 1
-              fi
+          cd server
+          docker compose build
+          docker compose down --remove-orphans >/dev/null 2>&1 || true
+          
+          # Clean up any stale container holding port 8081
+          HOLDER="$(docker ps --format '{{.Names}} {{.Image}} {{.Ports}}' 2>/dev/null | grep '8081->8080' || true)"
+          if [ -n "$HOLDER" ]; then
+            echo "port holder: $HOLDER"
+            IMG="$(echo "$HOLDER" | awk '{print $2}')"
+            if [ "$IMG" = "server-backend" ] || [ "$IMG" = "docker.io/library/server-backend" ]; then
+              NAME="$(echo "$HOLDER" | awk '{print $1}')"
+              echo "stale own image container ($NAME) – stopping and removing"
+              docker stop "$NAME" >/dev/null
+              docker rm "$NAME" >/dev/null
+            else
+              echo "::error::host port 8081 is held by a foreign container:"
+              echo "$HOLDER"
+              echo "Stop it (docker stop <name>) or move our port, then re-run."
+              exit 1
             fi
-            # Host (non-docker) process check — needs no sudo for own processes.
-            if command -v ss >/dev/null 2>&1; then
-              HP="$(ss -tlnp 2>/dev/null | grep ':8081 ' || true)"
-              if [ -n "$HP" ]; then
-                echo "::error::host port 8081 is held by a host process (not docker):"
-                echo "$HP"
-                echo "Stop it (e.g. kill <pid> / systemctl stop <service>), then re-run."
-                exit 1
-              fi
+          fi
+          
+          if command -v ss >/dev/null 2>&1; then
+            HP="$(ss -tlnp 2>/dev/null | grep ':8081 ' || true)"
+            if [ -n "$HP" ]; then
+              echo "::error::host port 8081 is held by a host process (not docker):"
+              echo "$HP"
+              echo "Stop it (e.g. kill <pid> / systemctl stop <service>), then re-run."
+              exit 1
             fi
-            docker compose up -d
-            docker image prune -f
-            sleep 8
-            curl -f http://localhost:8081/health
-            # SPA served by the backend itself (same origin, no CORS involved):
-            # both domain root and the subpath serve the shell (a forced
-            # redirect would loop forever behind prefix-stripping gateways).
-            curl -s http://localhost:8081/ | grep -q "NodeVault"
-            curl -s http://localhost:8081/nodevault/ | grep -q "NodeVault"
-            # Gateway (host 8888 — :80 belongs to Apache): same backend
-            # through the /nodevault prefix, plus the gateway self-check.
-            curl -f http://localhost:8888/nodevault/health
-            curl -f http://localhost:8888/healthz
+          fi
+          
+          docker compose up -d
+          docker image prune -f
+          sleep 8
+          
+          # Health checks
+          curl -f http://localhost:8081/health
+          curl -s http://localhost:8081/ | grep -q "NodeVault"
+          curl -s http://localhost:8081/nodevault/ | grep -q "NodeVault"
