@@ -77,7 +77,7 @@ jobs:
           SSH="ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p ${{ secrets.SERVER_PORT || 22 }}"
           HOST="${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}"
           $SSH "$HOST" "mkdir -p '${{ secrets.SERVER_PATH }}'"
-          tar --exclude=./.git --exclude=./server/data --exclude=./server/tmp --exclude=./server/.env --exclude=./server/build-errors.log --exclude=./client/node_modules --exclude=./client/dist --exclude=./client/.env --exclude=./client/.env.local -czf - server client \
+          tar --exclude=./.git --exclude=./server/data --exclude=./server/tmp --exclude=./server/.env --exclude=./server/build-errors.log --exclude=./client/node_modules --exclude=./client/dist --exclude=./client/.env --exclude=./client/.env.local --exclude=./client/src/design -czf - server client .dockerignore \
             | $SSH "$HOST" "tar -C '${{ secrets.SERVER_PATH }}' -xzf -"
           rm -f ~/.ssh/deploy_key
           echo "sync done"
