@@ -136,18 +136,18 @@ func serveSPA(r *gin.Engine) {
 	if _, err := os.Stat("./dist/index.html"); err != nil {
 		return
 	}
-	base := strings.TrimSuffix(os.Getenv("APP_BASE_PATH"), "/")
+		base := strings.TrimSuffix(os.Getenv("APP_BASE_PATH"), "/")
 	r.NoRoute(func(c *gin.Context) {
 		p := c.Request.URL.Path
 		if strings.HasPrefix(p, "/api/") {
 			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 			return
 		}
+		// NOTE: no "/" → base redirect here on purpose. A prefix-stripping
+		// gateway turns /nodevault/ back into "/" — redirecting would loop
+		// forever. "/" serves the shell directly; the subpath is canonical
+		// by convention, not by force.
 		if base != "" {
-			if p == "/" {
-				c.Redirect(http.StatusFound, base+"/")
-				return
-			}
 			if p == base {
 				p = "/"
 			} else if strings.HasPrefix(p, base+"/") {
