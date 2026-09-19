@@ -1,0 +1,11 @@
+# Build context is the REPO ROOT (see server/docker-compose.yml).
+# Keep runtime state, secrets and toolchains out of the image.
+server/data/
+server/tmp/
+server/.env
+server/build-errors.log
+client/node_modules/
+client/dist/
+client/.env
+client/.env.local
+.git/
