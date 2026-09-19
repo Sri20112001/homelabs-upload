@@ -1,3 +1,4 @@
+name: homelabs-upload
 services:
   backend:
     # Context is the repo root so the image bakes BOTH backend and frontend.
