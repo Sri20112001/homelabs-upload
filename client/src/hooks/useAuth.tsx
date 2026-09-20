@@ -1,5 +1,5 @@
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
-import { authApi } from '../api/auth';
+import { useEffect } from 'react';
+import { useAuthStore } from '../stores/authStore';
 import type { AuthUser } from '../types';
 
 interface AuthState {
@@ -13,68 +13,21 @@ interface AuthState {
   refresh: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthState | null>(null);
-
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [setupNeeded, setSetupNeeded] = useState(false);
-
-  // Session lives in the HttpOnly cookie — just ask the server who we are.
-  const refresh = useCallback(async () => {
-    try {
-      const { user } = await authApi.me();
-      setUser(user);
-    } catch {
-      setUser(null);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+// Selector hook over the zustand auth store — same shape as before, so all
+// screens keep working unchanged. No AuthProvider needed anymore.
+export function useAuth(): AuthState {
+  const user = useAuthStore((s) => s.user);
+  const loading = useAuthStore((s) => s.loading);
+  const setupNeeded = useAuthStore((s) => s.setupNeeded);
+  const isAdmin = useAuthStore((s) => s.isAdmin);
+  const login = useAuthStore((s) => s.login);
+  const setup = useAuthStore((s) => s.setup);
+  const logout = useAuthStore((s) => s.logout);
+  const refresh = useAuthStore((s) => s.refresh);
 
   useEffect(() => {
-    (async () => {
-      try {
-        const s = await authApi.status();
-        setSetupNeeded(s.setup_needed);
-      } catch {
-        /* backend unreachable — pages show their own error */
-      }
-      await refresh();
-    })();
-  }, [refresh]);
-
-  const login = useCallback(async (username: string, password: string) => {
-    const { user } = await authApi.login(username, password);
-    setUser(user);
-    setSetupNeeded(false);
+    void useAuthStore.getState().boot();
   }, []);
 
-  const setup = useCallback(async (username: string, displayName: string, password: string) => {
-    const { user } = await authApi.setup(username, displayName, password);
-    setUser(user);
-    setSetupNeeded(false);
-  }, []);
-
-  const logout = useCallback(async () => {
-    try {
-      await authApi.logout();
-    } finally {
-      setUser(null);
-    }
-  }, []);
-
-  return (
-    <AuthContext.Provider
-      value={{ user, loading, setupNeeded, isAdmin: user?.role === 'admin', login, setup, logout, refresh }}
-    >
-      {children}
-    </AuthContext.Provider>
-  );
-}
-
-export function useAuth(): AuthState {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used inside AuthProvider');
-  return ctx;
+  return { user, loading, setupNeeded, isAdmin, login, setup, logout, refresh };
 }

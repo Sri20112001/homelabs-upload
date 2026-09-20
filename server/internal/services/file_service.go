@@ -373,6 +373,42 @@ func (s *FileService) FolderSize(clientPath string) (*models.FolderSizeResult, e
 	if err != nil {
 		return nil, err
 	}
+	total, count := walkSize(abs)
+	return &models.FolderSizeResult{
+		Path:      filesystem.ToClientPath(s.root, abs),
+		SizeBytes: total,
+		FileCount: count,
+	}, nil
+}
+
+// StorageBreakdown returns per-top-level-directory sizes for the dashboard
+// in ONE call (replaces list + N folderSize round trips).
+func (s *FileService) StorageBreakdown() (*models.StorageBreakdownResult, error) {
+	entries, err := os.ReadDir(s.root)
+	if err != nil {
+		return nil, models.NewError(models.ErrInternal, "cannot read directory")
+	}
+	folders := make([]models.FolderStat, 0, len(entries))
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		abs := filepath.Join(s.root, e.Name())
+		total, count := walkSize(abs)
+		folders = append(folders, models.FolderStat{
+			Name:      e.Name(),
+			Path:      filesystem.ToClientPath(s.root, abs),
+			Bytes:     total,
+			FileCount: count,
+		})
+	}
+	// Biggest first — matches the dashboard's display order.
+	sort.Slice(folders, func(i, j int) bool { return folders[i].Bytes > folders[j].Bytes })
+	return &models.StorageBreakdownResult{Folders: folders}, nil
+}
+
+// walkSize sums file bytes and counts files under abs (no symlink following).
+func walkSize(abs string) (int64, int) {
 	var total int64
 	var count int
 	_ = filepath.WalkDir(abs, func(_ string, d fs.DirEntry, err error) error {
@@ -385,11 +421,7 @@ func (s *FileService) FolderSize(clientPath string) (*models.FolderSizeResult, e
 		}
 		return nil
 	})
-	return &models.FolderSizeResult{
-		Path:      filesystem.ToClientPath(s.root, abs),
-		SizeBytes: total,
-		FileCount: count,
-	}, nil
+	return total, count
 }
 
 // ZipStream writes a zip archive of the given client paths to w.

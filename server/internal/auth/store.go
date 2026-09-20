@@ -1,26 +1,19 @@
 package auth
 
-// User + session store backed by embedded SQLite — no server to install.
-// One file, sibling of STORAGE_ROOT (never inside served files):
-//
-//	<parent-of-storage>/.nodevault/nodevault.db  (tables: users, sessions)
+// User + session store on Postgres (GORM).
 //
 // Passwords are bcrypt hashes. Tokens are 256-bit opaque bearers.
-// First-run JSON files (users.json/sessions.json) are imported once, then ignored.
 
 import (
 	"crypto/rand"
-	"database/sql"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/homelab/filemanager/internal/db"
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 )
 
 const (
@@ -29,12 +22,12 @@ const (
 )
 
 type User struct {
-	ID           string    `json:"id"`
-	Username     string    `json:"username"`
-	DisplayName  string    `json:"display_name"`
-	Role         string    `json:"role"`
-	PasswordHash string    `json:"password_hash,omitempty"`
-	CreatedAt    time.Time `json:"created_at"`
+	ID           string `gorm:"primaryKey" json:"id"`
+	Username     string `gorm:"uniqueIndex;not null" json:"username"`
+	DisplayName  string `json:"display_name"`
+	Role         string `json:"role"`
+	PasswordHash string `json:"password_hash,omitempty"`
+	CreatedAt    string `json:"created_at"`
 }
 
 func (u *User) Public() *User {
@@ -44,12 +37,12 @@ func (u *User) Public() *User {
 }
 
 type Session struct {
-	Token     string    `json:"token"`
-	UserID    string    `json:"user_id"`
-	Username  string    `json:"username"`
-	CreatedAt time.Time `json:"created_at"`
-	ExpiresAt time.Time `json:"expires_at"`
-	IP        string    `json:"ip,omitempty"`
+	Token     string `gorm:"primaryKey" json:"token"`
+	UserID    string `gorm:"index;not null" json:"user_id"`
+	Username  string `json:"username"`
+	CreatedAt string `json:"created_at"`
+	ExpiresAt string `json:"expires_at"`
+	IP        string `json:"ip,omitempty"`
 }
 
 const sessionTTL = 30 * 24 * time.Hour
@@ -62,28 +55,33 @@ var (
 )
 
 type Store struct {
-	database *sql.DB
-	dir      string
+	db *gorm.DB
 }
 
-func NewStore(storageRoot string) (*Store, error) {
-	dir, err := db.DirForStorage(storageRoot)
+func NewStore(dsn string) (*Store, error) {
+	database, err := db.Open(dsn, &User{}, &Session{})
 	if err != nil {
 		return nil, err
 	}
-	database, err := db.Open(dir)
-	if err != nil {
-		return nil, err
-	}
-	s := &Store{database: database, dir: dir}
-	if err := s.importLegacyJSON(); err != nil {
-		_ = database.Close()
-		return nil, err
-	}
-	return s, nil
+	return &Store{db: database}, nil
 }
 
-func (s *Store) Dir() string { return s.dir }
+// Ping reports whether the database answers.
+func (s *Store) Ping() error { return db.Ping(s.db) }
+
+// isDup reports unique-violation errors on either backend.
+func isDup(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, gorm.ErrDuplicatedKey) {
+		return true
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "UNIQUE") ||
+		strings.Contains(msg, "duplicate key") ||
+		strings.Contains(msg, "23505")
+}
 
 func parseTime(v string) time.Time {
 	t, _ := time.Parse(time.RFC3339Nano, v)
@@ -93,80 +91,14 @@ func parseTime(v string) time.Time {
 	return t.UTC()
 }
 
-func scanUser(row interface {
-	Scan(dest ...any) error
-}) (*User, error) {
-	var u User
-	var created string
-	if err := row.Scan(&u.ID, &u.Username, &u.DisplayName, &u.Role, &u.PasswordHash, &created); err != nil {
-		return nil, err
-	}
-	u.CreatedAt = parseTime(created)
-	return &u, nil
-}
-
-// importLegacyJSON migrates users.json/sessions.json once (pre-SQLite installs).
-func (s *Store) importLegacyJSON() error {
-	var n int
-	if err := s.database.QueryRow(`SELECT COUNT(*) FROM users`).Scan(&n); err != nil {
-		return err
-	}
-	if n > 0 {
-		return nil
-	}
-	data, err := os.ReadFile(filepath.Join(s.dir, "users.json"))
-	if err != nil || len(data) == 0 {
-		return nil
-	}
-	var users []*User
-	if err := json.Unmarshal(data, &users); err != nil {
-		return nil // corrupt legacy file: start fresh rather than fail boot
-	}
-	tx, err := s.database.Begin()
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	for _, u := range users {
-		if u.ID == "" || u.Username == "" {
-			continue
-		}
-		created := u.CreatedAt.UTC().Format(time.RFC3339Nano)
-		if _, err := tx.Exec(
-			`INSERT OR IGNORE INTO users(id,username,display_name,role,password_hash,created_at) VALUES(?,?,?,?,?,?)`,
-			u.ID, u.Username, u.DisplayName, u.Role, u.PasswordHash, created,
-		); err != nil {
-			return err
-		}
-	}
-	if data, err := os.ReadFile(filepath.Join(s.dir, "sessions.json")); err == nil && len(data) > 0 {
-		var sessions []*Session
-		if err := json.Unmarshal(data, &sessions); err == nil {
-			for _, sess := range sessions {
-				if sess.Token == "" || !sess.ExpiresAt.After(time.Now()) {
-					continue
-				}
-				_, _ = tx.Exec(
-					`INSERT OR IGNORE INTO sessions(token,user_id,username,created_at,expires_at,ip) VALUES(?,?,?,?,?,?)`,
-					sess.Token, sess.UserID, sess.Username,
-					sess.CreatedAt.UTC().Format(time.RFC3339Nano),
-					sess.ExpiresAt.UTC().Format(time.RFC3339Nano),
-					sess.IP,
-				)
-			}
-		}
-	}
-	return tx.Commit()
-}
-
 // ---- users ----
 
 func (s *Store) Count() int {
-	var n int
-	if err := s.database.QueryRow(`SELECT COUNT(*) FROM users`).Scan(&n); err != nil {
+	var n int64
+	if err := s.db.Model(&User{}).Count(&n).Error; err != nil {
 		return 0
 	}
-	return n
+	return int(n)
 }
 
 func (s *Store) SetupNeeded() bool { return s.Count() == 0 }
@@ -189,8 +121,8 @@ func (s *Store) CreateUser(username, displayName, password, role string) (*User,
 		displayName = strings.ToUpper(username[:1]) + username[1:]
 	}
 
-	var exists int
-	if err := s.database.QueryRow(`SELECT COUNT(*) FROM users WHERE username=?`, username).Scan(&exists); err != nil {
+	var exists int64
+	if err := s.db.Model(&User{}).Where("username = ?", username).Count(&exists).Error; err != nil {
 		return nil, err
 	}
 	if exists > 0 {
@@ -209,13 +141,10 @@ func (s *Store) CreateUser(username, displayName, password, role string) (*User,
 		DisplayName:  displayName,
 		Role:         role,
 		PasswordHash: string(hash),
-		CreatedAt:    time.Now().UTC(),
+		CreatedAt:    time.Now().UTC().Format(time.RFC3339Nano),
 	}
-	if _, err := s.database.Exec(
-		`INSERT INTO users(id,username,display_name,role,password_hash,created_at) VALUES(?,?,?,?,?,?)`,
-		u.ID, u.Username, u.DisplayName, u.Role, u.PasswordHash, u.CreatedAt.Format(time.RFC3339Nano),
-	); err != nil {
-		if strings.Contains(err.Error(), "UNIQUE") {
+	if err := s.db.Create(u).Error; err != nil {
+		if isDup(err) {
 			return nil, ErrExists
 		}
 		return nil, err
@@ -224,41 +153,34 @@ func (s *Store) CreateUser(username, displayName, password, role string) (*User,
 }
 
 func (s *Store) ListUsers() []*User {
-	rows, err := s.database.Query(
-		`SELECT id,username,display_name,role,password_hash,created_at FROM users ORDER BY created_at ASC`)
-	if err != nil {
-		return []*User{}
-	}
-	defer rows.Close()
 	out := []*User{}
-	for rows.Next() {
-		var u User
-		var created string
-		if err := rows.Scan(&u.ID, &u.Username, &u.DisplayName, &u.Role, &u.PasswordHash, &created); err != nil {
-			continue
-		}
-		u.CreatedAt = parseTime(created)
-		out = append(out, u.Public())
+	_ = s.db.Order("created_at ASC").Find(&out).Error
+	for _, u := range out {
+		u.PasswordHash = ""
 	}
 	return out
 }
 
 func (s *Store) getFull(username string) (*User, error) {
-	u, err := scanUser(s.database.QueryRow(
-		`SELECT id,username,display_name,role,password_hash,created_at FROM users WHERE username=?`, normalize(username)))
-	if err == sql.ErrNoRows {
-		return nil, ErrBadPassword
+	var u User
+	if err := s.db.Where("username = ?", normalize(username)).First(&u).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrBadPassword
+		}
+		return nil, err
 	}
-	return u, err
+	return &u, nil
 }
 
 func (s *Store) getByID(id string) (*User, error) {
-	u, err := scanUser(s.database.QueryRow(
-		`SELECT id,username,display_name,role,password_hash,created_at FROM users WHERE id=?`, id))
-	if err == sql.ErrNoRows {
-		return nil, ErrNotFound
+	var u User
+	if err := s.db.Where("id = ?", id).First(&u).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrNotFound
+		}
+		return nil, err
 	}
-	return u, err
+	return &u, nil
 }
 
 func (s *Store) Verify(username, password string) (*User, error) {
@@ -287,41 +209,41 @@ func (s *Store) UpdateUser(id, displayName, role, newPassword string) (*User, er
 		}
 		u.Role = role
 	}
-	tx, err := s.database.Begin()
+	err = s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&User{}).Where("id = ?", id).
+			Updates(map[string]any{"display_name": u.DisplayName, "role": u.Role}).Error; err != nil {
+			return err
+		}
+		if newPassword != "" {
+			if len(newPassword) < 4 {
+				return errors.New("password must be at least 4 characters")
+			}
+			hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+			if err != nil {
+				return err
+			}
+			if err := tx.Model(&User{}).Where("id = ?", id).
+				Update("password_hash", string(hash)).Error; err != nil {
+				return err
+			}
+			// Invalidate existing sessions after a password reset.
+			if err := tx.Where("user_id = ?", id).Delete(&Session{}).Error; err != nil {
+				return err
+			}
+			u.PasswordHash = string(hash)
+		}
+		return nil
+	})
 	if err != nil {
-		return nil, err
-	}
-	defer tx.Rollback()
-	if _, err := tx.Exec(`UPDATE users SET display_name=?, role=? WHERE id=?`, u.DisplayName, u.Role, id); err != nil {
-		return nil, err
-	}
-	if newPassword != "" {
-		if len(newPassword) < 4 {
-			return nil, errors.New("password must be at least 4 characters")
-		}
-		hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
-		if err != nil {
-			return nil, err
-		}
-		if _, err := tx.Exec(`UPDATE users SET password_hash=? WHERE id=?`, string(hash), id); err != nil {
-			return nil, err
-		}
-		// Invalidate existing sessions after a password reset.
-		if _, err := tx.Exec(`DELETE FROM sessions WHERE user_id=?`, id); err != nil {
-			return nil, err
-		}
-		u.PasswordHash = string(hash)
-	}
-	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
 	return u.Public(), nil
 }
 
 func (s *Store) adminCount() int {
-	var n int
-	_ = s.database.QueryRow(`SELECT COUNT(*) FROM users WHERE role='admin'`).Scan(&n)
-	return n
+	var n int64
+	_ = s.db.Model(&User{}).Where("role = ?", RoleAdmin).Count(&n).Error
+	return int(n)
 }
 
 func (s *Store) DeleteUser(id, selfID string) error {
@@ -335,18 +257,12 @@ func (s *Store) DeleteUser(id, selfID string) error {
 	if u.Role == RoleAdmin && s.adminCount() <= 1 {
 		return ErrLastAdmin
 	}
-	tx, err := s.database.Begin()
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	if _, err := tx.Exec(`DELETE FROM sessions WHERE user_id=?`, id); err != nil {
-		return err
-	}
-	if _, err := tx.Exec(`DELETE FROM users WHERE id=?`, id); err != nil {
-		return err
-	}
-	return tx.Commit()
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("user_id = ?", id).Delete(&Session{}).Error; err != nil {
+			return err
+		}
+		return tx.Where("id = ?", id).Delete(&User{}).Error
+	})
 }
 
 // ---- sessions ----
@@ -373,15 +289,11 @@ func (s *Store) CreateSession(user *User, ip string) (*Session, error) {
 		Token:     newToken(),
 		UserID:    full.ID,
 		Username:  full.Username,
-		CreatedAt: now,
-		ExpiresAt: now.Add(sessionTTL),
+		CreatedAt: now.Format(time.RFC3339Nano),
+		ExpiresAt: now.Add(sessionTTL).Format(time.RFC3339Nano),
 		IP:        ip,
 	}
-	if _, err := s.database.Exec(
-		`INSERT INTO sessions(token,user_id,username,created_at,expires_at,ip) VALUES(?,?,?,?,?,?)`,
-		sess.Token, sess.UserID, sess.Username,
-		sess.CreatedAt.Format(time.RFC3339Nano), sess.ExpiresAt.Format(time.RFC3339Nano), sess.IP,
-	); err != nil {
+	if err := s.db.Create(sess).Error; err != nil {
 		return nil, err
 	}
 	return sess, nil
@@ -393,26 +305,21 @@ func (s *Store) Lookup(token string) (*User, *Session) {
 		return nil, nil
 	}
 	var sess Session
-	var created, expires string
-	err := s.database.QueryRow(
-		`SELECT token,user_id,username,created_at,expires_at,ip FROM sessions WHERE token=?`, token,
-	).Scan(&sess.Token, &sess.UserID, &sess.Username, &created, &expires, &sess.IP)
-	if err != nil {
+	if err := s.db.Where("token = ?", token).First(&sess).Error; err != nil {
 		return nil, nil
 	}
-	sess.CreatedAt, sess.ExpiresAt = parseTime(created), parseTime(expires)
-	if time.Now().After(sess.ExpiresAt) {
-		_, _ = s.database.Exec(`DELETE FROM sessions WHERE token=?`, token)
+	if time.Now().After(parseTime(sess.ExpiresAt)) {
+		_ = s.db.Where("token = ?", token).Delete(&Session{}).Error
 		return nil, nil
 	}
 	u, err := s.getByID(sess.UserID)
 	if err != nil {
-		_, _ = s.database.Exec(`DELETE FROM sessions WHERE token=?`, token)
+		_ = s.db.Where("token = ?", token).Delete(&Session{}).Error
 		return nil, nil
 	}
 	return u.Public(), &sess
 }
 
 func (s *Store) Revoke(token string) {
-	_, _ = s.database.Exec(`DELETE FROM sessions WHERE token=?`, strings.TrimSpace(token))
+	_ = s.db.Where("token = ?", strings.TrimSpace(token)).Delete(&Session{}).Error
 }

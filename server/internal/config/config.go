@@ -16,6 +16,10 @@ type Config struct {
 	MaxUploadSize int64
 	CORSOrigin    string
 	APIKey        string
+	// DatabaseURL is the Postgres DSN, e.g.
+	// postgres://user:pass@postgres:5432/nodevault?sslmode=disable.
+	// The database is mandatory — boot fails fast without it.
+	DatabaseURL string
 }
 
 func Load() (*Config, error) {
@@ -34,6 +38,7 @@ func Load() (*Config, error) {
 		MaxUploadSize: getEnvInt64("MAX_UPLOAD_SIZE", 10<<30), // 10 GiB
 		CORSOrigin:    getEnv("CORS_ORIGIN", "http://localhost:5173"),
 		APIKey:        getEnv("API_KEY", ""),
+		DatabaseURL:   getEnv("DATABASE_URL", "postgresql://postgres:sri20112001@localhost:5432/nodevault?sslmode=disable"),
 	}
 
 	return cfg, cfg.validate()
@@ -57,6 +62,9 @@ func (c *Config) validate() error {
 	}
 	if !info.IsDir() {
 		return fmt.Errorf("STORAGE_ROOT %q is not a directory", c.StorageRoot)
+	}
+	if c.DatabaseURL == "" {
+		return errors.New("DATABASE_URL must be set (Postgres is required)")
 	}
 	return nil
 }

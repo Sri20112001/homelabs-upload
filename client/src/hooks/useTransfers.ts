@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { client } from '../api/client';
+import { refreshStorage } from './useStorage';
 import { CHUNK_THRESHOLD } from '../config/app';
 import type { TransferItem } from '../types';
 
@@ -52,6 +53,9 @@ export function useTransfers() {
           );
         }
         update(id, { status: 'completed', progress: 100, speed: 0 });
+        // Bytes changed on disk — refresh the storage pill/ring (deduped,
+        // so parallel completions share one request).
+        refreshStorage();
       } catch (e: unknown) {
         const msg = (e as Error).message ?? 'Upload failed';
         if (msg === 'Upload cancelled') {

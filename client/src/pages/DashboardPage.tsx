@@ -1,17 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { filesApi } from '../api/files';
-import { fetchMetrics, type ServerMetrics } from '../api/metrics';
-import { useStorage } from '../hooks/useStorage';
+import type { ServerMetrics } from '../api/metrics';
+import { useCountUp } from '../hooks/useCountUp';
 import { formatBytes } from '../utils';
 import { Icon } from '../components/ui/Icon';
-
-interface FolderStat {
-  name: string;
-  path: string;
-  bytes: number;
-  files: number;
-}
+import type { FolderStat, StorageInfo } from '../types';
 
 function StatCard({ icon, label, value, sub }: {
   icon: string; label: string; value: string; sub?: string;
@@ -34,41 +28,28 @@ function StatCard({ icon, label, value, sub }: {
 
 export function DashboardPage({ onUpload }: { onUpload: () => void }) {
   const navigate = useNavigate();
-  const storage = useStorage();
+  const [storage, setStorage] = useState<StorageInfo | null>(null);
   const [metrics, setMetrics] = useState<ServerMetrics | null>(null);
   const [folders, setFolders] = useState<FolderStat[] | null>(null);
 
-  const loadMetrics = useCallback(async () => {
-    setMetrics(await fetchMetrics());
-  }, []);
-
-  useEffect(() => { loadMetrics(); }, [loadMetrics]);
-
-  // Storage breakdown by top-level directory (real folderSize calls).
+  // Whole dashboard in ONE request (GET /api/dashboard): storage ring,
+  // folders and metrics all come from it. (TopBar keeps its own shared
+  // storage poller for the pill — this page adds zero extra calls.)
   useEffect(() => {
     let cancelled = false;
-    (async () => {
-      try {
-        const root = await filesApi.list('/');
-        const dirs = root.items.filter((i) => i.type === 'directory');
-        const stats = await Promise.all(
-          dirs.map(async (d) => {
-            try {
-              const s = await filesApi.folderSize(d.path);
-              return { name: d.name, path: d.path, bytes: s.size_bytes, files: s.file_count };
-            } catch {
-              return { name: d.name, path: d.path, bytes: 0, files: 0 };
-            }
-          }),
-        );
-        if (!cancelled) {
-          stats.sort((a, b) => b.bytes - a.bytes);
-          setFolders(stats);
-        }
-      } catch {
-        if (!cancelled) setFolders([]);
-      }
-    })();
+    filesApi.dashboard()
+      .then((res) => {
+        if (cancelled) return;
+        setStorage(res.storage);
+        setMetrics(res.metrics);
+        setFolders(res.folders);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setStorage(null);
+        setMetrics(null);
+        setFolders([]);
+      });
     return () => { cancelled = true; };
   }, []);
 
@@ -79,6 +60,17 @@ export function DashboardPage({ onUpload }: { onUpload: () => void }) {
     ? `${((metrics.request_errors / metrics.requests_total) * 100).toFixed(1)}%`
     : '0%';
   const maxFolder = folders && folders.length > 0 ? folders[0].bytes : 1;
+
+  // Count-up: one eased 0→1 progress started when data arrives; every
+  // number below is its final value × progress (0 on first paint).
+  const progress = useCountUp(metrics !== null && folders !== null);
+  const animUsedPct = Math.round(usedPct * progress);
+  const animUsedBytes = (storage?.used_bytes ?? 0) * progress;
+  const animRequests = Math.round((metrics?.requests_total ?? 0) * progress);
+  const animErrorRate = `${(parseFloat(errorRate) * progress).toFixed(1)}%`;
+  const animLatency = ((metrics?.latency_avg_ms ?? 0) * progress).toFixed(1);
+  const animUploads = Math.round((metrics?.uploads_total ?? 0) * progress);
+  const animUploadBytes = (metrics?.upload_bytes_total ?? 0) * progress;
 
   return (
     <div className="flex flex-col w-full pb-16 max-w-8xl mx-auto">
@@ -119,24 +111,24 @@ export function DashboardPage({ onUpload }: { onUpload: () => void }) {
             <circle
               cx="40" cy="40" r="30" fill="none"
               stroke="var(--color-primary)" strokeWidth="9" strokeLinecap="round"
-              strokeDasharray={`${(usedPct / 100) * 188.5} 188.5`}
+              strokeDasharray={`${(animUsedPct / 100) * 188.5} 188.5`}
             />
           </svg>
           <div className="flex flex-col gap-1 min-w-0">
             <span className="font-family-geist text-[11px] text-(--color-secondary)">Storage used</span>
             <span className="font-family-geist text-[20px] font-semibold text-(--color-on-surface)">
-              {storage ? `${usedPct}%` : '—'}
+              {storage ? `${animUsedPct}%` : '—'}
             </span>
             <span className="font-family-geist text-[11px] text-(--color-secondary) truncate">
-              {storage ? `${formatBytes(storage.used_bytes)} of ${formatBytes(storage.total_bytes)}` : 'Backend unreachable'}
+              {storage ? `${formatBytes(animUsedBytes)} of ${formatBytes(storage.total_bytes)}` : 'Backend unreachable'}
             </span>
           </div>
         </div>
-        <StatCard icon="http" label="Total Requests" value={metrics ? metrics.requests_total.toLocaleString() : '—'} />
-        <StatCard icon="error" label="Error Rate" value={metrics ? errorRate : '—'} sub={metrics ? `${metrics.request_errors.toLocaleString()} errors` : undefined} />
-        <StatCard icon="speed" label="Avg Latency" value={metrics ? `${metrics.latency_avg_ms.toFixed(1)} ms` : '—'} />
-        <StatCard icon="upload" label="Uploads" value={metrics ? metrics.uploads_total.toLocaleString() : '—'} />
-        <StatCard icon="storage" label="Upload Data" value={metrics ? formatBytes(metrics.upload_bytes_total) : '—'} />
+        <StatCard icon="http" label="Total Requests" value={metrics ? animRequests.toLocaleString() : '—'} />
+        <StatCard icon="error" label="Error Rate" value={metrics ? animErrorRate : '—'} sub={metrics ? `${Math.round(metrics.request_errors * progress).toLocaleString()} errors` : undefined} />
+        <StatCard icon="speed" label="Avg Latency" value={metrics ? `${animLatency} ms` : '—'} />
+        <StatCard icon="upload" label="Uploads" value={metrics ? animUploads.toLocaleString() : '—'} />
+        <StatCard icon="storage" label="Upload Data" value={metrics ? formatBytes(animUploadBytes) : '—'} />
       </div>
 
       {/* Storage by folder */}
@@ -182,11 +174,11 @@ export function DashboardPage({ onUpload }: { onUpload: () => void }) {
                 <div className="flex-1 h-2 rounded-full bg-(--color-surface-container) overflow-hidden">
                   <div
                     className="h-full rounded-full bg-(--color-primary) transition-all"
-                    style={{ width: `${maxFolder > 0 ? Math.round((f.bytes / maxFolder) * 100) : 0}%` }}
+                    style={{ width: `${maxFolder > 0 ? Math.round(((f.bytes * progress) / maxFolder) * 100) : 0}%` }}
                   />
                 </div>
                 <span className="font-family-geist text-[11px] text-(--color-secondary) w-28 text-right shrink-0">
-                  {formatBytes(f.bytes)} · {f.files} files
+                  {formatBytes(f.bytes * progress)} · {Math.round(f.files * progress)} files
                 </span>
               </button>
             ))}

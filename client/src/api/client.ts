@@ -1,5 +1,6 @@
 import type { ApiErrorResponse } from '../types';
 import { API_BASE_URL, CHUNK_SIZE } from '../config/app';
+import { useAuthStore } from '../stores/authStore';
 
 const BASE = API_BASE_URL;
 
@@ -19,6 +20,40 @@ export class ApiError extends Error {
   }
 }
 
+// Human wording per HTTP status, used only when the server did NOT supply
+// its own specific message (unparseable body, proxy/gateway HTML, …).
+// Server-sent messages (e.g. "file already exists") always win.
+const FRIENDLY_BY_STATUS: Record<number, string> = {
+  400: 'That request was invalid. Check the values and try again.',
+  401: 'Your session expired. Please log in again.',
+  403: 'You do not have permission to do that.',
+  404: 'Not found. It may have been moved, renamed or deleted.',
+  409: 'That name is already taken. Pick a different one.',
+  413: 'Too large. Try a smaller file or ask an admin to raise the limit.',
+  429: 'Too many requests. Wait a moment and try again.',
+  500: 'Something went wrong on the server. Please try again.',
+  502: 'The server is not responding. Try again in a moment.',
+  503: 'The server is temporarily unavailable. Try again in a moment.',
+};
+
+function fallbackForStatus(status: number): string {
+  if (status >= 500) return 'Something went wrong on the server. Please try again.';
+  if (status >= 400) return 'That did not work. Check the values and try again.';
+  return 'Something went wrong. Please try again.';
+}
+
+/**
+ * Resolve the message a user should see. Specific server messages pass
+ * through untouched; raw "HTTP 500"-style fallbacks and connection failures
+ * become plain-language sentences.
+ */
+export function friendlyError(status: number, code: string, message: string): string {
+  if (message && !/^HTTP \d+/.test(message)) return message;
+  if (code === 'CANCELLED') return 'Cancelled.';
+  if (!status) return 'Cannot reach the server. Check that the backend is running and try again.';
+  return FRIENDLY_BY_STATUS[status] ?? fallbackForStatus(status);
+}
+
 async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
     let code = 'INTERNAL_ERROR';
@@ -31,49 +66,65 @@ async function handleResponse<T>(res: Response): Promise<T> {
       // ignore parse errors
     }
     if (res.status === 401 && code === 'UNAUTHORIZED') {
-      // Session expired / logged out elsewhere — bounce to login once.
+      // Session expired / revoked / logged out elsewhere. The profile is
+      // persisted in zustand, so it MUST be cleared here — otherwise the
+      // stale user would bounce straight back past every auth guard.
+      useAuthStore.getState().clearSession();
       if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
         const base = import.meta.env.BASE_URL === '/' ? '' : import.meta.env.BASE_URL.replace(/\/$/, '');
         window.location.assign(`${base}/login`);
       }
     }
-    throw new ApiError(code, message, res.status);
+    throw new ApiError(code, friendlyError(res.status, code, message), res.status);
   }
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
 }
 
+// Single choke point for fetch(): network-level failures (backend down,
+// CORS blocked, offline) become ApiErrors with plain-language messages
+// instead of raw TypeErrors like "Failed to fetch".
+async function request<T>(path: string, init: RequestInit): Promise<T> {
+  let res: Response;
+  try {
+    res = await fetch(`${BASE}${path}`, init);
+  } catch {
+    throw new ApiError('NETWORK_ERROR', friendlyError(0, 'NETWORK_ERROR', ''), 0);
+  }
+  return handleResponse<T>(res);
+}
+
 export const client = {
   get<T>(path: string, signal?: AbortSignal): Promise<T> {
-    return fetch(`${BASE}${path}`, { credentials: CRED, signal }).then(handleResponse<T>);
+    return request<T>(path, { credentials: CRED, signal });
   },
 
   post<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
-    return fetch(`${BASE}${path}`, {
+    return request<T>(path, {
       method: 'POST',
       credentials: CRED,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
       signal,
-    }).then(handleResponse<T>);
+    });
   },
 
   patch<T>(path: string, body: unknown): Promise<T> {
-    return fetch(`${BASE}${path}`, {
+    return request<T>(path, {
       method: 'PATCH',
       credentials: CRED,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
-    }).then(handleResponse<T>);
+    });
   },
 
   delete<T>(path: string, body: unknown): Promise<T> {
-    return fetch(`${BASE}${path}`, {
+    return request<T>(path, {
       method: 'DELETE',
       credentials: CRED,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
-    }).then(handleResponse<T>);
+    });
   },
 
   uploadFile(
@@ -101,17 +152,21 @@ export const client = {
         if (xhr.status >= 200 && xhr.status < 300) {
           resolve(JSON.parse(xhr.responseText));
         } else {
+          let code = 'INTERNAL_ERROR';
+          let message = `HTTP ${xhr.status}`;
           try {
-            const body: ApiErrorResponse = JSON.parse(xhr.responseText);
-            reject(new ApiError(body.error.code, body.error.message, xhr.status));
+            const body = JSON.parse(xhr.responseText) as ApiErrorResponse;
+            code = body.error.code;
+            message = body.error.message;
           } catch {
-            reject(new ApiError('INTERNAL_ERROR', `HTTP ${xhr.status}`, xhr.status));
+            // non-JSON error body (proxy/gateway HTML) — mapped below
           }
+          reject(new ApiError(code, friendlyError(xhr.status, code, message), xhr.status));
         }
       });
 
       xhr.addEventListener('error', () =>
-        reject(new ApiError('NETWORK_ERROR', 'Network error', 0)),
+        reject(new ApiError('NETWORK_ERROR', friendlyError(0, 'NETWORK_ERROR', ''), 0)),
       );
 
       signal.addEventListener('abort', () => {
@@ -146,7 +201,7 @@ export const client = {
         `${BASE}/files/chunk?upload_id=${encodeURIComponent(uploadId)}&index=${i}`,
         { method: 'POST', credentials: CRED, body: chunk, signal },
       );
-      if (!res.ok) throw new ApiError('INTERNAL_ERROR', `Chunk ${i} failed`, res.status);
+      if (!res.ok) throw new ApiError('INTERNAL_ERROR', friendlyError(res.status, 'INTERNAL_ERROR', ''), res.status);
       uploaded += chunk.size;
       const now = Date.now();
       const dt = (now - lastTime) / 1000;
@@ -163,8 +218,16 @@ export const client = {
       signal,
     });
     if (!finalRes.ok) {
-      const body: ApiErrorResponse = await finalRes.json().catch(() => ({ error: { code: 'INTERNAL_ERROR', message: 'Finalize failed' } }));
-      throw new ApiError(body.error.code, body.error.message, finalRes.status);
+      let code = 'INTERNAL_ERROR';
+      let message = '';
+      try {
+        const body: ApiErrorResponse = await finalRes.json();
+        code = body.error.code;
+        message = body.error.message;
+      } catch {
+        // non-JSON error body — mapped by status below
+      }
+      throw new ApiError(code, friendlyError(finalRes.status, code, message), finalRes.status);
     }
     return finalRes.json();
   },

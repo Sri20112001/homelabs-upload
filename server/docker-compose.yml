@@ -21,10 +21,48 @@ services:
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3456}
       API_KEY: ${API_KEY:-}
       APP_BASE_PATH: ${APP_BASE_PATH:-/nodevault/}
+      # Postgres is the only database (mandatory). Defaults to the postgres
+      # service below; override with a managed instance if you have one.
+      DATABASE_URL: ${DATABASE_URL:-postgres://nodevault:nodevault@postgres:5432/nodevault?sslmode=disable}
+    depends_on:
+      postgres:
+        condition: service_healthy
     volumes:
-      # Mount the parent so BOTH /data/files (uploads) and
-      # /data/.nodevault/nodevault.db (users, sessions, activity) persist.
-      - ./data:/data
+      # Named volume by default (NOT a ./data bind mount): uploads under
+      # /data/files and access.log must survive `docker compose down` AND the
+      # deploy job's fresh checkout (actions/checkout wipes gitignored paths
+      # like ./data). (Users/sessions/logs now live in Postgres, not here.)
+      #
+      # Custom host location: set DATA_DIR=/srv/nodevault/data (or any path
+      # OUTSIDE the checkout) in server/.env — it becomes a bind mount.
+      # The backend runs as root, so no permission setup is needed.
+      - ${DATA_DIR:-nodevault-data}:/data
+    networks:
+      - gateway-net
+    restart: unless-stopped
+
+  # Postgres — the application's only database.
+  # Data lives in the pgdata named volume (survives down/rebuilds/redeploys).
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-nodevault}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nodevault}
+      POSTGRES_DB: ${POSTGRES_DB:-nodevault}
+    volumes:
+      # pgdata named volume by default; PGDATA_DIR=/srv/nodevault/pgdata (or
+      # any path outside the checkout) makes it a host bind mount instead.
+      # The postgres image runs as uid 999, so pre-create with:
+      #   mkdir -p /srv/nodevault/pgdata && chown -R 999:999 /srv/nodevault/pgdata
+      - ${PGDATA_DIR:-pgdata}:/var/lib/postgresql/data
+    healthcheck:
+      # Lets the backend wait for a READY database instead of crash-looping
+      # on first boot while Postgres initializes the data directory.
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-nodevault} -d $${POSTGRES_DB:-nodevault}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
     networks:
       - gateway-net
     restart: unless-stopped
@@ -42,7 +80,8 @@ services:
       - ./gateway/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
@@ -54,3 +93,5 @@ networks:
 
 volumes:
   caddy_data:
+  nodevault-data:
+  pgdata:

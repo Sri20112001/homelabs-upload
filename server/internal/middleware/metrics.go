@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/homelab/filemanager/internal/models"
 )
 
 // Counters — all updated atomically, no external dependency needed.
@@ -44,19 +45,28 @@ func Metrics() gin.HandlerFunc {
 // AddUploadBytes lets the handler report exact bytes written (for chunked uploads).
 func AddUploadBytes(n int64) { metricUploadBytesTotal.Add(n) }
 
+// Snapshot returns the current counter values for API consumers
+// (dashboard endpoint). Prometheus scraping still uses MetricsHandler.
+func Snapshot() models.DashboardMetrics {
+	reqs := metricRequestsTotal.Load()
+	latency := metricLatencyMsTotal.Load()
+	var avg float64
+	if reqs > 0 {
+		avg = float64(latency) / float64(reqs)
+	}
+	return models.DashboardMetrics{
+		RequestsTotal:    reqs,
+		RequestErrors:    metricRequestErrors.Load(),
+		UploadBytesTotal: metricUploadBytesTotal.Load(),
+		UploadsTotal:     metricUploadCount.Load(),
+		LatencyAvgMs:     avg,
+	}
+}
+
 // MetricsHandler serves a Prometheus text-format /metrics response.
 func MetricsHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		reqs := metricRequestsTotal.Load()
-		errs := metricRequestErrors.Load()
-		uploadBytes := metricUploadBytesTotal.Load()
-		uploads := metricUploadCount.Load()
-		latency := metricLatencyMsTotal.Load()
-
-		var avgLatency float64
-		if reqs > 0 {
-			avgLatency = float64(latency) / float64(reqs)
-		}
+		snap := Snapshot()
 
 		body := fmt.Sprintf(`# HELP filemanager_requests_total Total HTTP requests handled
 # TYPE filemanager_requests_total counter
@@ -77,7 +87,7 @@ filemanager_uploads_total %d
 # HELP filemanager_request_latency_avg_ms Average request latency in milliseconds
 # TYPE filemanager_request_latency_avg_ms gauge
 filemanager_request_latency_avg_ms %.2f
-`, reqs, errs, uploadBytes, uploads, avgLatency)
+`, snap.RequestsTotal, snap.RequestErrors, snap.UploadBytesTotal, snap.UploadsTotal, snap.LatencyAvgMs)
 
 		c.Data(http.StatusOK, "text/plain; version=0.0.4; charset=utf-8", []byte(body))
 	}

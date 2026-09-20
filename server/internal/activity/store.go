@@ -1,31 +1,29 @@
 package activity
 
 // Curated, human-readable activity log ("who did what to which file, when").
-// Backed by the embedded SQLite node database (table: activity) — indexed,
-// filterable, no log-file parsing. Pre-SQLite activity.jsonl is imported once.
+// Postgres-backed (GORM) — indexed, filterable, no log-file parsing.
 
 import (
-	"bufio"
-	"database/sql"
-	"encoding/json"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/homelab/filemanager/internal/db"
+	"gorm.io/gorm"
 )
 
 type Entry struct {
-	Time   time.Time `json:"time"`
-	User   string    `json:"user"`
-	Role   string    `json:"role,omitempty"`
-	Action string    `json:"action"`
-	Path   string    `json:"path,omitempty"`
-	Detail string    `json:"detail,omitempty"`
-	IP     string    `json:"ip,omitempty"`
-	Status int       `json:"status,omitempty"`
+	ID     uint   `gorm:"primaryKey;autoIncrement" json:"-"`
+	Time   string `json:"time"`
+	User   string `json:"user"`
+	Role   string `json:"role,omitempty"`
+	Action string `gorm:"index:idx_activity_action" json:"action"`
+	Path   string `json:"path,omitempty"`
+	Detail string `json:"detail,omitempty"`
+	IP     string `json:"ip,omitempty"`
+	Status int    `json:"status,omitempty"`
 }
+
+func (Entry) TableName() string { return "activity" }
 
 // File-oriented actions surfaced in the Activity UI.
 const (
@@ -49,80 +47,22 @@ const (
 )
 
 type Store struct {
-	database *sql.DB
-	dir      string
+	database *gorm.DB
 }
 
-func NewStore(storageRoot string) (*Store, error) {
-	dir, err := db.DirForStorage(storageRoot)
+func NewStore(dsn string) (*Store, error) {
+	database, err := db.Open(dsn, &Entry{})
 	if err != nil {
 		return nil, err
 	}
-	database, err := db.Open(dir)
-	if err != nil {
-		return nil, err
-	}
-	s := &Store{database: database, dir: dir}
-	if err := s.importLegacyJSONL(); err != nil {
-		_ = database.Close()
-		return nil, err
-	}
-	return s, nil
+	return &Store{database: database}, nil
 }
-
-func (s *Store) Path() string { return filepath.Join(s.dir, "nodevault.db") }
 
 func (s *Store) Log(e Entry) {
-	if e.Time.IsZero() {
-		e.Time = time.Now().UTC()
+	if e.Time == "" {
+		e.Time = time.Now().UTC().Format(time.RFC3339Nano)
 	}
-	_, _ = s.database.Exec(
-		`INSERT INTO activity(time,user,role,action,path,detail,ip,status) VALUES(?,?,?,?,?,?,?,?)`,
-		e.Time.UTC().Format(time.RFC3339Nano), e.User, e.Role, e.Action,
-		e.Path, e.Detail, e.IP, e.Status,
-	)
-}
-
-// importLegacyJSONL migrates activity.jsonl once (pre-SQLite installs).
-func (s *Store) importLegacyJSONL() error {
-	var n int
-	if err := s.database.QueryRow(`SELECT COUNT(*) FROM activity`).Scan(&n); err != nil {
-		return err
-	}
-	if n > 0 {
-		return nil
-	}
-	f, err := os.Open(filepath.Join(s.dir, "activity.jsonl"))
-	if err != nil {
-		return nil // no legacy file: fresh node
-	}
-	defer f.Close()
-	tx, err := s.database.Begin()
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	stmt, err := tx.Prepare(
-		`INSERT INTO activity(time,user,role,action,path,detail,ip,status) VALUES(?,?,?,?,?,?,?,?)`)
-	if err != nil {
-		return err
-	}
-	defer stmt.Close()
-	sc := bufio.NewScanner(f)
-	sc.Buffer(make([]byte, 256*1024), 256*1024)
-	for sc.Scan() {
-		var e Entry
-		if err := json.Unmarshal([]byte(sc.Text()), &e); err != nil {
-			continue
-		}
-		t := e.Time.UTC()
-		if t.IsZero() {
-			t = time.Now().UTC()
-		}
-		_, _ = stmt.Exec(t.Format(time.RFC3339Nano), e.User, e.Role, e.Action,
-			e.Path, e.Detail, e.IP, e.Status)
-	}
-	return tx.Commit()
+	_ = s.database.Create(&e).Error
 }
 
 type Query struct {
@@ -147,55 +87,29 @@ func (s *Store) List(q Query) Result {
 	action := strings.ToLower(strings.TrimSpace(q.Action))
 	search := strings.ToLower(strings.TrimSpace(q.Search))
 
-	var conds []string
-	var args []any
+	tx := s.database.Model(&Entry{})
 	if user != "" {
-		conds = append(conds, `LOWER(user)=?`)
-		args = append(args, user)
+		tx = tx.Where("LOWER(user) = ?", user)
 	}
 	if action != "" {
-		conds = append(conds, `LOWER(action)=?`)
-		args = append(args, action)
+		tx = tx.Where("LOWER(action) = ?", action)
 	}
 	if search != "" {
-		conds = append(conds, `LOWER(path || ' ' || detail || ' ' || user) LIKE ?`)
-		args = append(args, "%"+search+"%")
-	}
-	where := ""
-	if len(conds) > 0 {
-		where = "WHERE " + strings.Join(conds, " AND ")
+		tx = tx.Where("LOWER(path || ' ' || detail || ' ' || user) LIKE ?", "%"+search+"%")
 	}
 
-	var total int
-	if err := s.database.QueryRow(`SELECT COUNT(*) FROM activity `+where, args...).Scan(&total); err != nil {
+	var total int64
+	if err := tx.Count(&total).Error; err != nil {
 		return Result{Items: []Entry{}}
 	}
-	rows, err := s.database.Query(
-		`SELECT time,user,role,action,path,detail,ip,status FROM activity `+where+` ORDER BY id DESC LIMIT ?`,
-		append(args, limit)...,
-	)
-	if err != nil {
-		return Result{Items: []Entry{}}
-	}
-	defer rows.Close()
 	items := []Entry{}
-	for rows.Next() {
-		var e Entry
-		var t string
-		if err := rows.Scan(&t, &e.User, &e.Role, &e.Action, &e.Path, &e.Detail, &e.IP, &e.Status); err != nil {
-			continue
-		}
-		if parsed, err := time.Parse(time.RFC3339Nano, t); err == nil {
-			e.Time = parsed
-		} else if parsed, err := time.Parse(time.RFC3339, t); err == nil {
-			e.Time = parsed
-		}
-		items = append(items, e)
+	if err := tx.Order("id DESC").Limit(limit).Find(&items).Error; err != nil {
+		return Result{Items: []Entry{}}
 	}
-	return Result{Items: items, Total: total}
+	return Result{Items: items, Total: int(total)}
 }
 
 func (s *Store) Clear() error {
-	_, err := s.database.Exec(`DELETE FROM activity`)
-	return err
+	// Global delete needs an explicit allowlist clause in GORM.
+	return s.database.Where("1 = 1").Delete(&Entry{}).Error
 }

@@ -17,7 +17,7 @@ import { ShortcutsModal } from './components/ui/ShortcutsModal';
 import { OfflineBanner } from './components/ui/OfflineBanner';
 import { OnboardingTour, useOnboardingTour } from './components/ui/OnboardingTour';
 import { ToastProvider, useToast } from './components/ui/Toast';
-import { AuthProvider, useAuth } from './hooks/useAuth';
+import { useAuth } from './hooks/useAuth';
 import { useTransfers } from './hooks/useTransfers';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
 
@@ -194,9 +194,7 @@ const AppInner = () => {
 export default function App() {
   return (
     <ToastProvider>
-      <AuthProvider>
-        <AppInner />
-      </AuthProvider>
+      <AppInner />
     </ToastProvider>
   );
 }

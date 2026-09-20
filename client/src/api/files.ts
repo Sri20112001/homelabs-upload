@@ -1,6 +1,6 @@
 import { client } from './client';
 import { API_BASE_URL } from '../config/app';
-import type { ListResponse, FileItem, StorageInfo, SearchResponse, TrashItem, FolderSizeResult } from '../types';
+import type { ListResponse, FileItem, StorageInfo, SearchResponse, TrashItem, FolderSizeResult, DashboardData } from '../types';
 
 export const filesApi = {
   // NOTE: Go serializes empty slices as `null`, so every list-shaped
@@ -72,6 +72,13 @@ export const filesApi = {
 
   storage(): Promise<StorageInfo> {
     return client.get('/storage');
+  },
+
+  // Entire dashboard in ONE request: storage + folder breakdown + metrics.
+  // NOTE: Go serializes empty slices as `null`, normalized to [] here.
+  async dashboard(signal?: AbortSignal): Promise<DashboardData> {
+    const res = await client.get<DashboardData>('/dashboard', signal);
+    return { ...res, folders: res.folders ?? [] };
   },
 
   // Trash

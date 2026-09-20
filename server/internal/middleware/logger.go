@@ -5,30 +5,71 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/homelab/filemanager/internal/applog"
 	"github.com/rs/zerolog/log"
 )
 
-// Logger logs method, path, status, duration, and request ID for every request.
-func Logger() gin.HandlerFunc {
+// Logger logs method, path, status, duration, and request ID for every request
+// to stdout (zerolog) and, when w != nil, persists a structured record to the
+// app_logs table via a non-blocking batched writer. DB writes never stall
+// requests: a saturated buffer sheds records instead of blocking.
+func Logger(w *applog.Writer) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()
 		c.Next()
+		duration := time.Since(start)
+		status := c.Writer.Status()
+		requestID := c.GetHeader("X-Request-ID")
 		log.Info().
 			Str("method", c.Request.Method).
 			Str("path", c.Request.URL.Path).
-			Int("status", c.Writer.Status()).
-			Dur("duration", time.Since(start)).
-			Str("request_id", c.GetHeader("X-Request-ID")).
+			Int("status", status).
+			Dur("duration", duration).
+			Str("request_id", requestID).
 			Msg("request")
+		if w == nil {
+			return
+		}
+		username := ""
+		if v, ok := c.Get("username"); ok {
+			if s, ok := v.(string); ok {
+				username = s
+			}
+		}
+		w.Log(applog.Record{
+			Level:      applog.LevelForStatus(status),
+			Service:    "backend",
+			Message:    "request",
+			RequestID:  requestID,
+			Method:     c.Request.Method,
+			Path:       c.Request.URL.Path,
+			Status:     status,
+			DurationMs: duration.Milliseconds(),
+			Username:   username,
+			IP:         c.ClientIP(),
+		})
 	}
 }
 
-// Recovery catches panics and returns a structured JSON error.
-func Recovery() gin.HandlerFunc {
+// Recovery catches panics, persists an error record when w != nil, and
+// returns a structured JSON error.
+func Recovery(w *applog.Writer) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		defer func() {
 			if r := recover(); r != nil {
 				log.Error().Interface("panic", r).Msg("recovered from panic")
+				if w != nil {
+					w.Log(applog.Record{
+						Level:     applog.LevelError,
+						Service:   "backend",
+						Message:   "panic recovered",
+						RequestID: c.GetHeader("X-Request-ID"),
+						Method:    c.Request.Method,
+						Path:      c.Request.URL.Path,
+						Status:    http.StatusInternalServerError,
+						IP:        c.ClientIP(),
+					})
+				}
 				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
 					"error": gin.H{
 						"code":    "INTERNAL_ERROR",

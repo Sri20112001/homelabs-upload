@@ -51,6 +51,36 @@ type FolderSizeResult struct {
 	FileCount int    `json:"file_count"`
 }
 
+// FolderStat is one row of the storage breakdown (per top-level directory).
+type FolderStat struct {
+	Name      string `json:"name"`
+	Path      string `json:"path"`
+	Bytes     int64  `json:"bytes"`
+	FileCount int    `json:"files"`
+}
+
+// StorageBreakdownResult is the response for GET /api/storage/breakdown.
+type StorageBreakdownResult struct {
+	Folders []FolderStat `json:"folders"`
+}
+
+// DashboardMetrics mirrors the Prometheus counters as JSON.
+type DashboardMetrics struct {
+	RequestsTotal    int64   `json:"requests_total"`
+	RequestErrors    int64   `json:"request_errors"`
+	UploadBytesTotal int64   `json:"upload_bytes_total"`
+	UploadsTotal     int64   `json:"uploads_total"`
+	LatencyAvgMs     float64 `json:"latency_avg_ms"`
+}
+
+// DashboardResponse is the single response for GET /api/dashboard:
+// disk usage + per-folder breakdown + server metrics in one round trip.
+type DashboardResponse struct {
+	Storage StorageInfo      `json:"storage"`
+	Folders []FolderStat     `json:"folders"`
+	Metrics DashboardMetrics `json:"metrics"`
+}
+
 // AuditEntry is a single audit log record.
 type AuditEntry struct {
 	Time   time.Time `json:"time"`

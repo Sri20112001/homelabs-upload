@@ -33,6 +33,7 @@ Copy `.env.example` to `.env` and adjust values:
 | `MAX_UPLOAD_SIZE` | `10737418240` (10 GiB)    | Maximum upload size in bytes         |
 | `CORS_ORIGIN`     | `http://localhost:5173`   | Allowed frontend origin              |
 | `API_KEY`         | *(empty)*                 | Static bearer token; empty = no auth |
+| `DATABASE_URL`    | compose pg service        | Postgres DSN (mandatory)             |
 
 The server **fails fast** if `STORAGE_ROOT` does not exist or is not a directory.
 
@@ -42,9 +43,14 @@ The server **fails fast** if `STORAGE_ROOT` does not exist or is not a directory
 
 ```bash
 cp .env.example .env
-# edit .env — set STORAGE_ROOT to an existing directory
+# edit .env — set STORAGE_ROOT to an existing directory,
+# and DATABASE_URL to a reachable Postgres
 go run ./cmd/server
 ```
+
+A Postgres must be reachable (the database is mandatory — boot fails fast
+without it). Easiest local option: `docker compose up -d postgres`, which
+uses the compose defaults (`nodevault/nodevault`, db `nodevault`).
 
 ---
 
@@ -54,16 +60,32 @@ go run ./cmd/server
 docker compose up --build
 ```
 
-Storage is mounted at `./data` → `/data/files` inside the container.
+Uploads and `access.log` live in the `nodevault-data` named volume (mounted
+at `/data`); all users, sessions, activity and app logs live in Postgres
+(`pgdata` volume). Named volumes survive `docker compose down`, rebuilds
+and CI redeploys.
+
+To keep data at a custom host path outside the checkout instead, set in
+`server/.env` (one or both):
+
+```bash
+DATA_DIR=/srv/nodevault/data      # uploads + access.log
+PGDATA_DIR=/srv/nodevault/pgdata  # postgres data (pre-create: mkdir -p … && chown -R 999:999 …)
+```
+
+For local `go run` (no Docker), `STORAGE_ROOT` is the same knob: point it at
+any directory and the `.nodevault/` db dir plus `access.log` are created next
+to it, e.g. `STORAGE_ROOT=D:\NodeVaultData\files` (Windows) or
+`STORAGE_ROOT=/srv/nodevault/data/files` (Linux).
 
 ---
 
 ## Authentication
 
 Multi-user logins with per-user activity logging.
-No database server to install — users, sessions and the activity log live in
-an embedded SQLite file at `<parent-of-STORAGE_ROOT>/.nodevault/nodevault.db`
-(auto-created on first run, pre-SQLite `users.json`/`activity.jsonl` are imported once).
+Users, sessions, the activity log and the app log live in Postgres
+(tables auto-migrated on boot via GORM AutoMigrate) — all stores go through
+GORM, so there is exactly one database backend to maintain.
 
 - First run: `POST /api/auth/setup {username, display_name, password}` creates
   the admin (the login page does this for you).
@@ -92,6 +114,24 @@ All routes are prefixed with `/api`.
 
 ```
 GET /health
+```
+
+Unauthenticated. Returns status, UTC timestamp, process uptime and a DB
+reachability check — `200` when healthy, `503` when the database is down:
+
+```json
+{"status":"ok","timestamp":"2026-09-20T10:00:00Z","uptimeSec":12345,"checks":{"db":"up"}}
+```
+
+### App logs (aggregator feed)
+
+Every request is persisted as a structured record (level, method, path,
+status, duration, user, IP, request id) via a non-blocking batched writer —
+queryable for log aggregation alongside the activity feed:
+
+```
+GET /api/app-logs?limit=100&level=error&q=upload&request_id=&since=2026-09-20T00:00:00Z
+DELETE /api/app-logs   (admin only)
 ```
 
 ### List Directory
@@ -171,6 +211,16 @@ GET /api/search?q=report&path=/Documents
 ```
 GET /api/storage
 ```
+
+### Dashboard (single call)
+
+```
+GET /api/dashboard
+```
+
+Disk usage + per-folder breakdown + server metrics in one round trip —
+what the dashboard renders (replaces separate `/storage`,
+`/storage/breakdown` and `/metrics` calls).
 
 ---
 

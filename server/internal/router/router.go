@@ -5,16 +5,22 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/homelab/filemanager/internal/activity"
+	"github.com/homelab/filemanager/internal/applog"
 	"github.com/homelab/filemanager/internal/auth"
 	"github.com/homelab/filemanager/internal/config"
 	"github.com/homelab/filemanager/internal/handlers"
 	"github.com/homelab/filemanager/internal/middleware"
 	"github.com/homelab/filemanager/internal/services"
+	"github.com/rs/zerolog/log"
 	"golang.org/x/time/rate"
 )
+
+// startedAt marks process boot for the /health uptime counter.
+var startedAt = time.Now()
 
 func New(cfg *config.Config) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
@@ -24,27 +30,47 @@ func New(cfg *config.Config) *gin.Engine {
 		_, _ = os.Stderr.WriteString("audit log init failed: " + err.Error() + "\n")
 	}
 
-	// File-backed user + activity stores (sibling of STORAGE_ROOT).
-	userStore, err := auth.NewStore(cfg.StorageRoot)
+	// Postgres-backed stores. The database is mandatory: fail fast here
+	// rather than serving 500s on every route.
+	userStore, err := auth.NewStore(cfg.DatabaseURL)
 	if err != nil {
-		_, _ = os.Stderr.WriteString("auth store init failed: " + err.Error() + "\n")
+		log.Fatal().Err(err).Msg("auth store init failed")
 	}
-	activityStore, err := activity.NewStore(cfg.StorageRoot)
+	activityStore, err := activity.NewStore(cfg.DatabaseURL)
 	if err != nil {
-		_, _ = os.Stderr.WriteString("activity store init failed: " + err.Error() + "\n")
+		log.Fatal().Err(err).Msg("activity store init failed")
 	}
+	appLogStore, err := applog.NewStore(cfg.DatabaseURL)
+	if err != nil {
+		log.Fatal().Err(err).Msg("app log store init failed")
+	}
+	// Async batched writer: request logs reach the DB without ever
+	// blocking the request path.
+	appLogWriter := applog.NewWriter(appLogStore)
+	log.Info().Msg("postgres connected")
 
 	r := gin.New()
-	r.Use(middleware.Recovery())
-	r.Use(middleware.Logger())
+	r.Use(middleware.Recovery(appLogWriter))
+	r.Use(middleware.Logger(appLogWriter))
 	r.Use(middleware.CORS(cfg.CORSOrigin))
 	r.Use(middleware.RateLimit(rate.Limit(60), 120))
 	r.Use(middleware.Metrics())
 	r.Use(middleware.AuditLogger())
 
-	// Health — unauthenticated
+	// Health — unauthenticated. 200 when the DB pings, 503 otherwise
+	// (Docker HEALTHCHECK and deploy gates key off the status code).
 	r.GET("/health", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+		db := "up"
+		status, code := "ok", http.StatusOK
+		if userStore == nil || userStore.Ping() != nil {
+			db, status, code = "down", "degraded", http.StatusServiceUnavailable
+		}
+		c.JSON(code, gin.H{
+			"status":    status,
+			"timestamp": time.Now().UTC().Format(time.RFC3339),
+			"uptimeSec": int64(time.Since(startedAt).Seconds()),
+			"checks":    gin.H{"db": db},
+		})
 	})
 
 	// Metrics — unauthenticated (scrape from Prometheus/Grafana)
@@ -55,6 +81,8 @@ func New(cfg *config.Config) *gin.Engine {
 	ah := handlers.NewAuthHandler(userStore, activityStore)
 	uh := handlers.NewUsersHandler(userStore, activityStore)
 	ach := handlers.NewActivityHandler(activityStore)
+	alh := handlers.NewAppLogsHandler(appLogStore)
+	dh := handlers.NewDashboardHandler(svc)
 
 	// Public auth endpoints (login + first-run setup).
 	r.GET("/api/auth/status", ah.Status)
@@ -89,6 +117,9 @@ func New(cfg *config.Config) *gin.Engine {
 		v1.POST("/directories", fh.CreateDirectory)
 		v1.GET("/search", fh.Search)
 		v1.GET("/storage", fh.StorageInfo)
+		v1.GET("/storage/breakdown", fh.StorageBreakdown)
+		// Single dashboard payload: storage + folders + metrics.
+		v1.GET("/dashboard", dh.Dashboard)
 
 		trash := v1.Group("/trash")
 		trash.GET("", fh.TrashList)
@@ -99,6 +130,11 @@ func New(cfg *config.Config) *gin.Engine {
 		// Activity — every user can read (shared transparency), only admin clears.
 		v1.GET("/activity", ach.List)
 		v1.DELETE("/activity", middleware.RequireAdmin(), ach.Clear)
+
+		// App logs — structured request log for the future aggregator.
+		// Same visibility as activity: every user reads, only admin clears.
+		v1.GET("/app-logs", alh.List)
+		v1.DELETE("/app-logs", middleware.RequireAdmin(), alh.Clear)
 
 		// Users — list + create for any logged-in user (no open
 		// registration: accounts are created by existing users, and every
@@ -136,7 +172,7 @@ func serveSPA(r *gin.Engine) {
 	if _, err := os.Stat("./dist/index.html"); err != nil {
 		return
 	}
-		base := strings.TrimSuffix(os.Getenv("APP_BASE_PATH"), "/")
+	base := strings.TrimSuffix(os.Getenv("APP_BASE_PATH"), "/")
 	r.NoRoute(func(c *gin.Context) {
 		p := c.Request.URL.Path
 		if strings.HasPrefix(p, "/api/") {

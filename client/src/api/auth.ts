@@ -1,19 +1,30 @@
 import { API_BASE_URL } from '../config/app';
-import { client } from './client';
+import { ApiError, client, friendlyError } from './client';
 import type { AuthUser } from '../types';
 
 async function publicPost<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(`${API_BASE_URL}${path}`, {
-    method: 'POST',
-    // include so the browser stores the HttpOnly nv_session cookie,
-    // including cross-origin when CORS allows credentials.
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE_URL}${path}`, {
+      method: 'POST',
+      // include so the browser stores the HttpOnly nv_session cookie,
+      // including cross-origin when CORS allows credentials.
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw new ApiError('NETWORK_ERROR', friendlyError(0, 'NETWORK_ERROR', ''), 0);
+  }
   if (!res.ok) {
+    let code = 'INTERNAL_ERROR';
+    let message = `HTTP ${res.status}`;
     const data = await res.json().catch(() => null);
-    throw new Error(data?.error?.message ?? `HTTP ${res.status}`);
+    if (data?.error) {
+      code = data.error.code;
+      message = data.error.message;
+    }
+    throw new ApiError(code, friendlyError(res.status, code, message), res.status);
   }
   return res.json() as Promise<T>;
 }

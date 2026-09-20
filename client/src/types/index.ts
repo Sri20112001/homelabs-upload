@@ -40,6 +40,31 @@ export interface FolderSizeResult {
   file_count: number;
 }
 
+// One row of GET /api/storage/breakdown (dashboard "Storage by folder").
+export interface FolderStat {
+  name: string;
+  path: string;
+  bytes: number;
+  files: number;
+}
+
+export interface StorageBreakdownResult {
+  folders: FolderStat[];
+}
+
+// Single GET /api/dashboard payload.
+export interface DashboardData {
+  storage: StorageInfo;
+  folders: FolderStat[];
+  metrics: {
+    requests_total: number;
+    request_errors: number;
+    upload_bytes_total: number;
+    uploads_total: number;
+    latency_avg_ms: number;
+  };
+}
+
 export interface AppError {
   code: string;
   message: string;

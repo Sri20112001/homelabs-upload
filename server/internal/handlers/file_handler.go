@@ -233,6 +233,17 @@ func (h *FileHandler) StorageInfo(c *gin.Context) {
 	c.JSON(http.StatusOK, info)
 }
 
+// StorageBreakdown  GET /api/storage/breakdown — per-top-level-directory
+// sizes in one call (dashboard "Storage by folder" without N+1 requests).
+func (h *FileHandler) StorageBreakdown(c *gin.Context) {
+	res, err := h.svc.StorageBreakdown()
+	if err != nil {
+		respondError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, res)
+}
+
 // ZipDownload  POST /api/files/zip
 func (h *FileHandler) ZipDownload(c *gin.Context) {
 	var req struct {
