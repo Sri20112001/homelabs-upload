@@ -19,7 +19,6 @@ export const activityApi = {
     const res = await client.get<{ items: ActivityEntry[]; total: number }>(`/activity${suffix}`);
     return { items: res.items ?? [], total: res.total ?? 0 };
   },
-  clear(): Promise<{ message: string }> {
-    return client.delete('/activity', {});
-  },
+  // Logs are append-only and immutable (server returns 410 on DELETE).
+  // No clear/alter/delete API exists by design.
 };

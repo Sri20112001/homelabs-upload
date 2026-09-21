@@ -69,7 +69,7 @@ func NewStore(dsn string) (*Store, error) {
 // Ping reports whether the database answers.
 func (s *Store) Ping() error { return db.Ping(s.db) }
 
-// isDup reports unique-violation errors on either backend.
+// isDup reports Postgres unique-violation errors.
 func isDup(err error) bool {
 	if err == nil {
 		return false

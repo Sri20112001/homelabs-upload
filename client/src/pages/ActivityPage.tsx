@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { activityApi } from '../api/activity';
 import { usersApi } from '../api/users';
-import { useAuth } from '../hooks/useAuth';
 import type { ActivityEntry } from '../types';
 import { Icon } from '../components/ui/Icon';
 
@@ -66,7 +65,6 @@ function avatarClass(name: string): string {
 }
 
 export function ActivityPage() {
-  const { isAdmin } = useAuth();
   const [items, setItems] = useState<ActivityEntry[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -93,19 +91,13 @@ export function ActivityPage() {
     usersApi.list().then((r) => setMembers(r.items.map((u) => u.username))).catch(() => {});
   }, [load]);
 
-  const clear = async () => {
-    if (!confirm('Clear the whole activity log? This cannot be undone.')) return;
-    await activityApi.clear();
-    load();
-  };
-
   return (
     <div className="flex flex-col w-full pb-16 max-w-8xl mx-auto">
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="font-family-geist text-[22px] font-semibold text-(--color-on-surface) mb-1">Activity</h1>
           <p className="font-family-inter text-[13px] text-(--color-secondary)">
-            Who did what, and when — {total} event{total === 1 ? '' : 's'} found.
+            Who did what, and when — {total} event{total === 1 ? '' : 's'} found. Logs are append-only and cannot be cleared or altered.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -116,15 +108,6 @@ export function ActivityPage() {
           >
             <Icon name="refresh" size={14} /> Refresh
           </button>
-          {isAdmin && (
-            <button
-              type="button"
-              onClick={clear}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-(--color-surface-container-lowest) border border-(--color-surface-container-high) font-family-geist text-[12px] text-(--color-secondary) hover:text-(--color-error) transition-colors"
-            >
-              <Icon name="delete" size={14} /> Clear
-            </button>
-          )}
         </div>
       </div>
 

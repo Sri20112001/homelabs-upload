@@ -6,7 +6,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/homelab/filemanager/internal/activity"
-	"github.com/homelab/filemanager/internal/middleware"
 )
 
 type ActivityHandler struct {
@@ -29,13 +28,10 @@ func (h *ActivityHandler) List(c *gin.Context) {
 	c.JSON(http.StatusOK, res)
 }
 
-// DELETE /api/activity (admin — clear log)
+// Clear is intentionally unsupported: the activity log is append-only and
+// immutable (DB trigger rejects UPDATE/DELETE/TRUNCATE). Kept as an
+// explicit 410 so old clients fail loudly instead of silently assuming
+// the log was wiped.
 func (h *ActivityHandler) Clear(c *gin.Context) {
-	_, actor, _, _ := middleware.CurrentUser(c)
-	if err := h.log.Clear(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{"code": "INTERNAL_ERROR", "message": "cannot clear log"}})
-		return
-	}
-	h.log.Log(activity.Entry{User: actor, Action: activity.ActionTrashPurge, Detail: "cleared activity log", IP: c.ClientIP(), Status: 200})
-	c.JSON(http.StatusOK, gin.H{"message": "activity cleared"})
+	c.JSON(http.StatusGone, gin.H{"error": gin.H{"code": "IMMUTABLE", "message": "Activity log is append-only and cannot be cleared, altered, or deleted."}})
 }

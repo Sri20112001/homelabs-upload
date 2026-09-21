@@ -29,9 +29,10 @@ services:
         condition: service_healthy
     volumes:
       # Named volume by default (NOT a ./data bind mount): uploads under
-      # /data/files and access.log must survive `docker compose down` AND the
-      # deploy job's fresh checkout (actions/checkout wipes gitignored paths
-      # like ./data). (Users/sessions/logs now live in Postgres, not here.)
+      # /data/files must survive `docker compose down` AND the deploy job's
+      # fresh checkout (actions/checkout wipes gitignored paths like ./data).
+      # (Users/sessions/logs all live in Postgres, not here — there is no
+      # access.log file; the DB is the single append-only log store.)
       #
       # Custom host location: set DATA_DIR=/srv/nodevault/data (or any path
       # OUTSIDE the checkout) in server/.env — it becomes a bind mount.

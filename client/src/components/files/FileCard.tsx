@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import type { FileItem } from '../../types';
 import { formatBytes, formatRelativeTime, getFileIcon, getFileColor } from '../../utils';
 import { setInternalDrag, getInternalPath, isInternalDrag } from '../../utils/dnd';
@@ -6,6 +6,7 @@ import { IMAGE_EXTS } from '../../config/contentTypes';
 import { ContextMenu } from './ContextMenu';
 import { filesApi } from '../../api/files';
 import { Icon } from '../ui/Icon';
+import { useLongPress } from '../../hooks/useLongPress';
 
 function isImage(item: FileItem): boolean {
   const ext = (item.extension ?? '').replace('.', '').toLowerCase();
@@ -40,6 +41,10 @@ export function FileCard({
     e.preventDefault();
     setMenu({ x: e.clientX, y: e.clientY });
   };
+
+  // Touch: long-press opens the same menu right-click opens on desktop.
+  const openMenuAt = useCallback((x: number, y: number) => setMenu({ x, y }), []);
+  const press = useLongPress(openMenuAt);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') onOpen();
@@ -80,16 +85,27 @@ export function FileCard({
         tabIndex={0}
         draggable
         onClick={(e) => {
+          if (press.suppressClick()) return; // tap after a long-press menu
           if (e.ctrlKey || e.metaKey || e.shiftKey) onSelect(true);
           else onOpen();
         }}
         onKeyDown={handleKeyDown}
         onContextMenu={handleContextMenu}
+        onTouchStart={(e) => {
+          if (e.touches.length === 1) {
+            const t = e.touches[0];
+            press.start(t.clientX, t.clientY);
+          }
+        }}
+        onTouchEnd={press.cancel}
+        onTouchMove={press.cancel}
+        onTouchCancel={press.cancel}
         onDragStart={handleDragStart}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        className={`group relative rounded-xl p-(--spacing-space-md) shadow-sm hover:shadow-md transition-all cursor-pointer flex flex-col justify-between focus:outline-none focus-visible:ring-2 focus-visible:ring-(--color-primary) ${
+        style={{ WebkitTouchCallout: 'none' }}
+        className={`group relative select-none rounded-xl p-(--spacing-space-md) shadow-sm hover:shadow-md transition-all cursor-pointer flex flex-col justify-between focus:outline-none focus-visible:ring-2 focus-visible:ring-(--color-primary) ${
           dragOver
             ? 'bg-(--color-primary-fixed)/40 border-2 border-(--color-primary) scale-[1.02]'
             : selected

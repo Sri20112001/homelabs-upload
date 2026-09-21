@@ -8,6 +8,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/homelab/filemanager/internal/applog"
 	"github.com/homelab/filemanager/internal/config"
 	"github.com/homelab/filemanager/internal/router"
 	"github.com/rs/zerolog"
@@ -22,9 +23,10 @@ func main() {
 		log.Fatal().Err(err).Msg("configuration error")
 	}
 
+	engine, appLogWriter := router.New(cfg)
 	srv := &http.Server{
 		Addr:              cfg.Host + ":" + cfg.Port,
-		Handler:           router.New(cfg),
+		Handler:           engine,
 		ReadHeaderTimeout: 30 * time.Second,
 	}
 
@@ -40,9 +42,22 @@ func main() {
 	<-quit
 
 	log.Info().Msg("shutting down gracefully")
+	// Persist the shutdown event before draining: shutdown itself is audit data.
+	if appLogWriter != nil {
+		appLogWriter.Log(applog.Record{
+			Level:   applog.LevelInfo,
+			Service: "backend",
+			Message: "server shutting down",
+		})
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(ctx); err != nil {
 		log.Error().Err(err).Msg("shutdown error")
+	}
+	// Drain buffered log batches so shutdown loses no records. DB is the
+	// authoritative log store — every record must reach it.
+	if appLogWriter != nil {
+		appLogWriter.Close()
 	}
 }

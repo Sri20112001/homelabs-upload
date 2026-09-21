@@ -2,6 +2,10 @@ package activity
 
 // Curated, human-readable activity log ("who did what to which file, when").
 // Postgres-backed (GORM) — indexed, filterable, no log-file parsing.
+//
+// The table is append-only and immutable: a DB trigger rejects UPDATE,
+// DELETE, and TRUNCATE, and the API exposes no mutation endpoint. Every
+// state-changing action (files, auth, users, config) must append here.
 
 import (
 	"strings"
@@ -44,6 +48,7 @@ const (
 	ActionZipDownload    = "zip_download"
 	ActionBulkRename     = "bulk_rename"
 	ActionPasswordChange = "password_change"
+	ActionConfigChange   = "config_change"
 )
 
 type Store struct {
@@ -109,7 +114,6 @@ func (s *Store) List(q Query) Result {
 	return Result{Items: items, Total: int(total)}
 }
 
-func (s *Store) Clear() error {
-	// Global delete needs an explicit allowlist clause in GORM.
-	return s.database.Where("1 = 1").Delete(&Entry{}).Error
-}
+// NOTE: no Clear/Update/Delete API by design. activity is append-only:
+// a DB trigger (see internal/db) rejects UPDATE/DELETE/TRUNCATE so entries
+// can never be altered or removed once written.

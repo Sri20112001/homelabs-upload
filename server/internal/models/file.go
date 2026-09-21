@@ -36,12 +36,12 @@ type StorageInfo struct {
 
 // TrashItem is a file/dir that has been soft-deleted.
 type TrashItem struct {
-	ID          string    `json:"id"`
-	OriginalPath string   `json:"original_path"`
-	Name        string    `json:"name"`
-	IsDir       bool      `json:"is_dir"`
-	Size        int64     `json:"size"`
-	DeletedAt   time.Time `json:"deleted_at"`
+	ID           string    `json:"id"`
+	OriginalPath string    `json:"original_path"`
+	Name         string    `json:"name"`
+	IsDir        bool      `json:"is_dir"`
+	Size         int64     `json:"size"`
+	DeletedAt    time.Time `json:"deleted_at"`
 }
 
 // FolderSizeResult is the response for an async folder size calculation.

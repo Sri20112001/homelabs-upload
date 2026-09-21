@@ -9,10 +9,11 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// Logger logs method, path, status, duration, and request ID for every request
-// to stdout (zerolog) and, when w != nil, persists a structured record to the
-// app_logs table via a non-blocking batched writer. DB writes never stall
-// requests: a saturated buffer sheds records instead of blocking.
+// Logger logs method, path, status, duration, and request ID for every request.
+// The database (app_logs) is the authoritative store: every request persists
+// a structured record via a non-blocking batched writer. stdout (zerolog) is
+// a human mirror only. DB writes never stall requests: a saturated buffer
+// sheds records instead of blocking (shed count via Writer.Dropped).
 func Logger(w *applog.Writer) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()

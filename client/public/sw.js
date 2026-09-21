@@ -1,6 +1,8 @@
-// Bumped to v2: purges the poisoned v1 cache (see activate handler below).
-const CACHE = 'nodevault-v2';
-const SHELL = ['/'];
+// Bumped to v3: subpath-safe shell keys (see below) purge older caches.
+const CACHE = 'nodevault-v3';
+// './' resolves against the SW script URL, so the shell key stays correct
+// whether the app is served from the domain root or a subpath (/nodevault/).
+const SHELL = './';
 
 // Dev hosts (vite) must never be intercepted — HMR modules, /metrics and
 // SPA navigations would otherwise be served stale or break outright.
@@ -13,7 +15,7 @@ function isDevHost() {
 self.addEventListener('install', (e) => {
   e.waitUntil(
     caches.open(CACHE).then((c) =>
-      c.addAll(SHELL).catch(() => {})
+      c.addAll([SHELL]).catch(() => {})
     )
   );
   self.skipWaiting();
@@ -26,6 +28,11 @@ self.addEventListener('activate', (e) => {
     )
   );
   self.clients.claim();
+});
+
+// Lets the page trigger activation of a waiting update on user action.
+self.addEventListener('message', (e) => {
+  if (e.data === 'SKIP_WAITING') self.skipWaiting();
 });
 
 self.addEventListener('fetch', (e) => {
@@ -44,9 +51,9 @@ self.addEventListener('fetch', (e) => {
         // Clone synchronously — before the page touches the body — or the
         // later put() throws "Response body is already used".
         const copy = res.clone();
-        if (res.ok) caches.open(CACHE).then((c) => c.put('/', copy)).catch(() => {});
+        if (res.ok) caches.open(CACHE).then((c) => c.put(SHELL, copy)).catch(() => {});
         return res;
-      }).catch(() => caches.match('/'))
+      }).catch(() => caches.match(SHELL))
     );
     return;
   }

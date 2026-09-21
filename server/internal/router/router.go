@@ -22,13 +22,15 @@ import (
 // startedAt marks process boot for the /health uptime counter.
 var startedAt = time.Now()
 
-func New(cfg *config.Config) *gin.Engine {
+// New wires the full server. All logs live in Postgres (app_logs +
+// activity, both append-only and immutable) — stdout/stderr stay as a
+// human mirror only, never the source of truth.
+//
+// It returns the engine plus the app-log writer so main can flush pending
+// log batches on graceful shutdown (Writer.Close drains the channel —
+// without it, buffered records would be lost on SIGTERM).
+func New(cfg *config.Config) (*gin.Engine, *applog.Writer) {
 	gin.SetMode(gin.ReleaseMode)
-
-	auditPath := filepath.Join(filepath.Dir(cfg.StorageRoot), "access.log")
-	if err := middleware.InitAuditLog(auditPath); err != nil {
-		_, _ = os.Stderr.WriteString("audit log init failed: " + err.Error() + "\n")
-	}
 
 	// Postgres-backed stores. The database is mandatory: fail fast here
 	// rather than serving 500s on every route.
@@ -48,6 +50,12 @@ func New(cfg *config.Config) *gin.Engine {
 	// blocking the request path.
 	appLogWriter := applog.NewWriter(appLogStore)
 	log.Info().Msg("postgres connected")
+	// Persist the lifecycle event itself: boot is part of the audit trail.
+	appLogWriter.Log(applog.Record{
+		Level:   applog.LevelInfo,
+		Service: "backend",
+		Message: "server starting",
+	})
 
 	r := gin.New()
 	r.Use(middleware.Recovery(appLogWriter))
@@ -55,7 +63,9 @@ func New(cfg *config.Config) *gin.Engine {
 	r.Use(middleware.CORS(cfg.CORSOrigin))
 	r.Use(middleware.RateLimit(rate.Limit(60), 120))
 	r.Use(middleware.Metrics())
-	r.Use(middleware.AuditLogger())
+	// Second DB audit stage (same app_logs table): coverage never depends
+	// on a single middleware being wired.
+	r.Use(middleware.AuditLogger(appLogWriter))
 
 	// Health — unauthenticated. 200 when the DB pings, 503 otherwise
 	// (Docker HEALTHCHECK and deploy gates key off the status code).
@@ -127,14 +137,16 @@ func New(cfg *config.Config) *gin.Engine {
 		trash.POST("/restore", fh.TrashRestore)
 		trash.DELETE("", fh.TrashPurge)
 
-		// Activity — every user can read (shared transparency), only admin clears.
+		// Activity — append-only and immutable: every user can read,
+		// nobody (not even admins) can clear, alter, or delete.
+		// DELETE stays wired to an explicit 410 so old clients fail loudly.
 		v1.GET("/activity", ach.List)
-		v1.DELETE("/activity", middleware.RequireAdmin(), ach.Clear)
+		v1.DELETE("/activity", ach.Clear)
 
 		// App logs — structured request log for the future aggregator.
-		// Same visibility as activity: every user reads, only admin clears.
+		// Same immutability as activity: read-only for every user.
 		v1.GET("/app-logs", alh.List)
-		v1.DELETE("/app-logs", middleware.RequireAdmin(), alh.Clear)
+		v1.DELETE("/app-logs", alh.Clear)
 
 		// Users — list + create for any logged-in user (no open
 		// registration: accounts are created by existing users, and every
@@ -146,15 +158,16 @@ func New(cfg *config.Config) *gin.Engine {
 		users.DELETE("/:id", uh.Delete)
 
 		// Runtime config — admin only (was open to every member).
+		// Every PATCH is appended to the immutable activity log.
 		rc := handlers.InitRuntimeConfig(cfg)
-		ch := handlers.NewConfigHandler(rc)
+		ch := handlers.NewConfigHandler(rc, activityStore)
 		v1.GET("/config", middleware.RequireAdmin(), ch.GetConfig)
 		v1.PATCH("/config", middleware.RequireAdmin(), ch.PatchConfig)
 	}
 
 	serveSPA(r)
 
-	return r
+	return r, appLogWriter
 }
 
 // serveSPA serves the built frontend (./dist, baked into the image) so one

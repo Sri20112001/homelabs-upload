@@ -1,15 +1,21 @@
 package applog
 
-// Structured application logs in Postgres (table: app_logs).
+// Structured application logs in Postgres (table: app_logs) — the single
+// authoritative store for all operational logs. No log lives only in files
+// or stdout.
 //
-// Every HTTP request writes one record (method, path, status, duration,
-// user, IP, request id); panics and 5xx responses are stored as level=error.
-// This is the feed a future log-aggregator (Loki/ELK/Grafana) tails — one
-// place for request logs plus the curated activity log.
+// Every HTTP request writes records (method, path, status, duration, user,
+// IP, request id) via Logger + AuditLogger; panics and 5xx responses are
+// stored as level=error; boot/shutdown persist lifecycle records. This is
+// the feed a future log-aggregator (Loki/ELK/Grafana) tails — one place for
+// request logs plus the curated activity log.
+//
+// The table is append-only and immutable: a DB trigger rejects UPDATE,
+// DELETE, and TRUNCATE, and the API exposes no mutation endpoint.
 //
 // Writes go through Writer: a buffered, non-blocking channel with batched
 // inserts, so a slow database can never slow down or block requests.
-// Time stays RFC3339Nano TEXT on both backends, like the activity log.
+// Time stays RFC3339Nano TEXT, like the activity log.
 
 import (
 	"strings"
@@ -42,8 +48,8 @@ type Record struct {
 	Username   string `json:"username"`
 	IP         string `json:"ip"`
 	// Fields carries extra structured context as a JSON object string.
-	// Kept as TEXT for backend parity; promote to JSONB on Postgres later
-	// if the aggregator wants server-side JSON queries.
+	// Kept as TEXT; promote to JSONB later if the aggregator wants
+	// server-side JSON queries.
 	Fields string `json:"fields,omitempty"`
 }
 
@@ -117,9 +123,9 @@ func (s *Store) List(q Query) Result {
 	return Result{Items: items, Total: int(total)}
 }
 
-func (s *Store) Clear() error {
-	return s.database.Where("1 = 1").Delete(&Record{}).Error
-}
+// NOTE: no Clear/Update/Delete API by design. app_logs is append-only:
+// a DB trigger (see internal/db) rejects UPDATE/DELETE/TRUNCATE so records
+// can never be altered or removed once written.
 
 // ---- async writer ----
 

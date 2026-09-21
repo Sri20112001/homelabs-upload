@@ -3,6 +3,7 @@ import { filesApi } from '../api/files';
 import { formatBytes } from '../utils';
 import { useTheme, type ThemeFamily, type ThemeMode } from '../hooks/useTheme';
 import { useAuth } from '../hooks/useAuth';
+import { usePwaInstall } from '../hooks/usePwaInstall';
 import { Icon } from '../components/ui/Icon';
 
 export interface ThemeOption {
@@ -64,6 +65,17 @@ export function SettingsPage() {
   // Destructure family and mode from the refactored useTheme hook
   const { family, mode, setFamily, setMode } = useTheme();
   const { isAdmin } = useAuth();
+  const { canInstall, installed, isIos, promptInstall } = usePwaInstall();
+  const [installing, setInstalling] = useState(false);
+
+  const handleInstall = async () => {
+    setInstalling(true);
+    try {
+      await promptInstall();
+    } finally {
+      setInstalling(false);
+    }
+  };
 
   const loadAll = useCallback(async () => {
     if (!isAdmin) {
@@ -219,6 +231,42 @@ export function SettingsPage() {
             );
           })}
         </div>
+      </section>
+
+      {/* Install app */}
+      <section className="mb-8 flex items-center gap-4 p-5 rounded-2xl bg-(--color-surface-container-lowest) border border-(--color-surface-container-high) shadow-sm">
+        <div className="w-11 h-11 rounded-xl bg-(--color-primary)/10 flex items-center justify-center shrink-0">
+          <Icon name="download" size={22} className="text-(--color-primary)" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <h2 className="font-(family-name:--font-family-geist) text-[13px] font-semibold text-(--color-on-surface)">
+            Install app
+          </h2>
+          <p className="font-(family-name:--font-family-inter) text-[12px] text-(--color-secondary)">
+            {installed
+              ? 'NodeVault is installed — it opens full-screen and keeps working offline.'
+              : canInstall
+                ? 'Add NodeVault to your home screen for full-screen mode and offline access.'
+                : isIos
+                  ? 'Tap Share, then “Add to Home Screen” for full-screen mode and offline access.'
+                  : 'Open this page in Chrome or Edge, then use the browser menu → “Install app”.'}
+          </p>
+        </div>
+        {installed ? (
+          <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-(--color-surface-container) font-(family-name:--font-family-geist) text-[12px] font-medium text-(--color-secondary) shrink-0">
+            <Icon name="check_circle" size={15} className="text-(--color-primary)" />
+            Installed
+          </span>
+        ) : canInstall ? (
+          <button
+            type="button"
+            onClick={handleInstall}
+            disabled={installing}
+            className="px-4 py-2 rounded-lg bg-(--color-primary) text-(--color-on-primary) font-(family-name:--font-family-geist) text-[12px] font-semibold shrink-0 disabled:opacity-50"
+          >
+            {installing ? 'Installing…' : 'Install'}
+          </button>
+        ) : null}
       </section>
 
       {/* Config form */}

@@ -1,6 +1,6 @@
 # NodeVault — Backend
 
-A production-quality REST API for a self-hosted file manager, built with Go and Gin. The filesystem is the source of truth — no database required.
+A production-quality REST API for a self-hosted file manager, built with Go and Gin. Files live on the filesystem; users, sessions, and all logs live in Postgres (mandatory).
 
 ---
 
@@ -60,22 +60,22 @@ uses the compose defaults (`nodevault/nodevault`, db `nodevault`).
 docker compose up --build
 ```
 
-Uploads and `access.log` live in the `nodevault-data` named volume (mounted
-at `/data`); all users, sessions, activity and app logs live in Postgres
-(`pgdata` volume). Named volumes survive `docker compose down`, rebuilds
-and CI redeploys.
+Uploads live in the `nodevault-data` named volume (mounted at `/data`);
+all users, sessions, activity and app logs live in Postgres (`pgdata`
+volume) — the DB is the single, append-only log store (no `access.log`
+file). Named volumes survive `docker compose down`, rebuilds and CI
+redeploys.
 
 To keep data at a custom host path outside the checkout instead, set in
 `server/.env` (one or both):
 
 ```bash
-DATA_DIR=/srv/nodevault/data      # uploads + access.log
+DATA_DIR=/srv/nodevault/data      # uploads
 PGDATA_DIR=/srv/nodevault/pgdata  # postgres data (pre-create: mkdir -p … && chown -R 999:999 …)
 ```
 
 For local `go run` (no Docker), `STORAGE_ROOT` is the same knob: point it at
-any directory and the `.nodevault/` db dir plus `access.log` are created next
-to it, e.g. `STORAGE_ROOT=D:\NodeVaultData\files` (Windows) or
+any directory, e.g. `STORAGE_ROOT=D:\NodeVaultData\files` (Windows) or
 `STORAGE_ROOT=/srv/nodevault/data/files` (Linux).
 
 ---
@@ -85,7 +85,7 @@ to it, e.g. `STORAGE_ROOT=D:\NodeVaultData\files` (Windows) or
 Multi-user logins with per-user activity logging.
 Users, sessions, the activity log and the app log live in Postgres
 (tables auto-migrated on boot via GORM AutoMigrate) — all stores go through
-GORM, so there is exactly one database backend to maintain.
+GORM against Postgres — the only database.
 
 - First run: `POST /api/auth/setup {username, display_name, password}` creates
   the admin (the login page does this for you).
@@ -131,8 +131,11 @@ queryable for log aggregation alongside the activity feed:
 
 ```
 GET /api/app-logs?limit=100&level=error&q=upload&request_id=&since=2026-09-20T00:00:00Z
-DELETE /api/app-logs   (admin only)
 ```
+
+Both `activity` and `app_logs` are append-only and immutable: reads only,
+no clear/alter/delete endpoint (DELETE returns `410 IMMUTABLE`), enforced
+by DB triggers that reject UPDATE/DELETE/TRUNCATE.
 
 ### List Directory
 

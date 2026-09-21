@@ -232,7 +232,7 @@ export function FileGrid({
               {dirs.length}
             </span>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-(--spacing-space-md)">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-(--spacing-space-md)">
             {dirs.map((item) => <FileCard key={item.path} {...cardProps(item)} />)}
           </div>
         </section>
@@ -248,7 +248,7 @@ export function FileGrid({
               {files.length} items
             </span>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-(--spacing-space-md)">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 md:gap-(--spacing-space-md)">
             {files.map((item) => <FileCard key={item.path} {...cardProps(item)} />)}
           </div>
         </section>

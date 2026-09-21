@@ -168,17 +168,18 @@ export function DashboardPage({ onUpload }: { onUpload: () => void }) {
                 className="flex items-center gap-3 px-2 py-2.5 rounded-lg hover:bg-(--color-surface-container-low) transition-colors text-left"
               >
                 <Icon name="folder" size={18} className="text-(--color-primary) shrink-0" />
-                <span className="font-family-geist text-[13px] text-(--color-on-surface) font-medium w-40 truncate shrink-0">
+                <span className="font-family-geist text-[13px] text-(--color-on-surface) font-medium w-24 min-[560px]:w-40 truncate shrink-0">
                   {f.name}
                 </span>
-                <div className="flex-1 h-2 rounded-full bg-(--color-surface-container) overflow-hidden">
+                <div className="flex-1 min-w-8 h-2 rounded-full bg-(--color-surface-container) overflow-hidden">
                   <div
                     className="h-full rounded-full bg-(--color-primary) transition-all"
                     style={{ width: `${maxFolder > 0 ? Math.round(((f.bytes * progress) / maxFolder) * 100) : 0}%` }}
                   />
                 </div>
-                <span className="font-family-geist text-[11px] text-(--color-secondary) w-28 text-right shrink-0">
-                  {formatBytes(f.bytes * progress)} · {Math.round(f.files * progress)} files
+                <span className="font-family-geist text-[11px] text-(--color-secondary) w-20 min-[560px]:w-28 text-right shrink-0 truncate">
+                  {formatBytes(f.bytes * progress)}
+                  <span className="hidden min-[560px]:inline"> · {Math.round(f.files * progress)} files</span>
                 </span>
               </button>
             ))}

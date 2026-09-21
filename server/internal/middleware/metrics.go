@@ -12,11 +12,11 @@ import (
 
 // Counters — all updated atomically, no external dependency needed.
 var (
-	metricRequestsTotal   atomic.Int64
-	metricRequestErrors   atomic.Int64
+	metricRequestsTotal    atomic.Int64
+	metricRequestErrors    atomic.Int64
 	metricUploadBytesTotal atomic.Int64
-	metricUploadCount     atomic.Int64
-	metricLatencyMsTotal  atomic.Int64 // sum of all request latencies in ms
+	metricUploadCount      atomic.Int64
+	metricLatencyMsTotal   atomic.Int64 // sum of all request latencies in ms
 )
 
 // Metrics middleware increments counters on every request.

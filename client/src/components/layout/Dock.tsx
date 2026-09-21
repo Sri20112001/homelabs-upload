@@ -31,11 +31,12 @@ export function Dock({
   return (
     <aside
       aria-label="System Dock"
-      className="fixed bottom-6 left-1/2 z-50 select-none animate-dock-rail"
+      className="fixed bottom-4 min-[560px]:bottom-6 left-1/2 -translate-x-1/2 z-50 select-none animate-dock-rail max-w-[calc(100vw-1rem)]"
     >
       {/* Outer Chassis */}
       <div
-        className="relative flex items-center gap-2 p-2 rounded-2xl
+        className="relative flex items-center gap-1 min-[560px]:gap-2 p-1.5 min-[560px]:p-2 rounded-2xl
+                   max-w-full overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden
                    bg-(--color-canvas)/90 backdrop-blur-2xl
                    border border-white/10
                    shadow-[0_20px_45px_-10px_rgba(0,0,0,0.65),0_0_0_1px_rgba(255,255,255,0.06)_inset]
@@ -45,7 +46,7 @@ export function Dock({
         <div className="absolute inset-x-5 top-0 h-px bg-linear-to-r from-transparent via-white/20 to-transparent pointer-events-none" />
 
         {/* Navigation Track */}
-        <nav className="flex items-center gap-1.5">
+        <nav className="flex items-center gap-1 min-[560px]:gap-1.5 shrink-0">
           {NAV_ITEMS.map((item) => {
             // Evaluates true whether activePage is "dashboard", "/", or empty ""
             const isActive =
@@ -60,8 +61,8 @@ export function Dock({
                 type="button"
                 onClick={() => onNavigate(item.path)}
                 aria-current={isActive ? "page" : undefined}
-                className={`group relative flex items-center gap-2.5 px-3.5 py-2 rounded-xl
-                           font-(family-name:--font-family-geist) text-[12px] font-medium 
+                className={`group relative shrink-0 flex items-center gap-2.5 px-2.5 min-[560px]:px-3.5 py-2 rounded-xl
+                           font-(family-name:--font-family-geist) text-[12px] font-medium
                            transition-all duration-200 ease-out active:scale-95 ${
                              isActive
                                ? "text-(--color-ink) bg-(--color-surface) border border-(--color-border-bright) shadow-md shadow-black/20"
@@ -91,7 +92,7 @@ export function Dock({
                   <Icon name={item.icon} size={16} />
                 </span>
 
-                <span>{item.label}</span>
+                <span className="hidden min-[560px]:inline">{item.label}</span>
 
                 {/* Hardware Telemetry Badge */}
                 {item.id === "transfers" && transferCount > 0 && (
@@ -105,7 +106,7 @@ export function Dock({
         </nav>
 
         {/* Industrial Channel Divider */}
-        <div className="flex flex-col justify-between h-6 w-px bg-white/10 mx-0.5">
+        <div className="flex flex-col justify-between h-6 w-px bg-white/10 mx-0.5 shrink-0">
           <span className="w-full h-1 bg-white/30" />
           <span className="w-full h-1 bg-white/30" />
         </div>
@@ -114,7 +115,7 @@ export function Dock({
         <button
           type="button"
           onClick={onUpload}
-          className="relative group overflow-hidden flex items-center gap-2 px-4 py-2 rounded-xl
+          className="relative group overflow-hidden shrink-0 flex items-center gap-2 px-3 min-[560px]:px-4 py-2 rounded-xl
                      font-family-geist text-[12px] font-semibold text-white
                      bg-linear-to-r from-(--color-accent) to-(--color-neon)
                      shadow-[0_0_18px_-3px_var(--color-accent)]
@@ -132,7 +133,7 @@ export function Dock({
             size={16}
             className="transition-transform duration-300 group-hover:rotate-90 text-current"
           />
-          <span>Upload</span>
+          <span className="hidden min-[560px]:inline">Upload</span>
         </button>
       </div>
     </aside>

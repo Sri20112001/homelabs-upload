@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import type { FileItem } from '../../types';
 import { formatBytes, formatRelativeTime, getFileIcon, getFileColor } from '../../utils';
 import { setInternalDrag, getInternalPath, isInternalDrag } from '../../utils/dnd';
 import { ContextMenu } from './ContextMenu';
 import { Icon } from '../ui/Icon';
+import { useLongPress } from '../../hooks/useLongPress';
 
 interface FileRowProps {
   item: FileItem;
@@ -27,6 +28,10 @@ export function FileRow({
   const color = isDir ? 'text-(--color-primary)' : getFileColor(item.name, item.mime_type);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [dragOver, setDragOver] = useState(false);
+
+  // Touch: long-press opens the same menu right-click opens on desktop.
+  const openMenuAt = useCallback((x: number, y: number) => setMenu({ x, y }), []);
+  const press = useLongPress(openMenuAt);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') onOpen();
@@ -63,16 +68,27 @@ export function FileRow({
         tabIndex={0}
         draggable
         onClick={(e) => {
+          if (press.suppressClick()) return; // tap after a long-press menu
           if (e.ctrlKey || e.metaKey || e.shiftKey) onSelect(true);
           else onOpen();
         }}
         onKeyDown={handleKeyDown}
         onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY }); }}
+        onTouchStart={(e) => {
+          if (e.touches.length === 1) {
+            const t = e.touches[0];
+            press.start(t.clientX, t.clientY);
+          }
+        }}
+        onTouchEnd={press.cancel}
+        onTouchMove={press.cancel}
+        onTouchCancel={press.cancel}
         onDragStart={handleDragStart}
         onDragOver={handleDragOver}
         onDragLeave={() => setDragOver(false)}
         onDrop={handleDrop}
-        className={`flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-(--color-primary) ${
+        style={{ WebkitTouchCallout: 'none' }}
+        className={`flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer select-none transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-(--color-primary) ${
           dragOver
             ? 'bg-(--color-primary-fixed)/40 border border-(--color-primary)'
             : selected

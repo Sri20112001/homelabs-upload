@@ -6,7 +6,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/homelab/filemanager/internal/applog"
-	"github.com/homelab/filemanager/internal/middleware"
 )
 
 type AppLogsHandler struct {
@@ -35,16 +34,10 @@ func (h *AppLogsHandler) List(c *gin.Context) {
 	c.JSON(http.StatusOK, res)
 }
 
-// DELETE /api/app-logs (admin — clear log)
+// Clear is intentionally unsupported: app logs are append-only and
+// immutable (DB trigger rejects UPDATE/DELETE/TRUNCATE). Kept as an
+// explicit 410 so old clients/admin scripts fail loudly instead of
+// silently assuming logs were wiped.
 func (h *AppLogsHandler) Clear(c *gin.Context) {
-	if h.log == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": gin.H{"code": "UNAVAILABLE", "message": "Log store unavailable."}})
-		return
-	}
-	if err := h.log.Clear(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{"code": "INTERNAL_ERROR", "message": "cannot clear log"}})
-		return
-	}
-	_, actor, _, _ := middleware.CurrentUser(c)
-	c.JSON(http.StatusOK, gin.H{"message": "app logs cleared by " + actor})
+	c.JSON(http.StatusGone, gin.H{"error": gin.H{"code": "IMMUTABLE", "message": "App logs are append-only and cannot be cleared, altered, or deleted."}})
 }
