@@ -36,58 +36,70 @@ jobs:
   deploy:
     name: deploy to server
     needs: test
-    runs-on: self-hosted
+    # No self-hosted runner: deploy from hosted GitHub runners over SSH.
+    # The server is prepared once with server/provision.sh (deploy user,
+    # authorized key, app checkout, docker). Required repo secrets:
+    #   SERVER_HOST    server IP/hostname (SSH, port 22)
+    #   SERVER_USER    deploy user (from provision.sh sanity checks)
+    #   SSH_PRIVATE_KEY  private half of DEPLOY_PUBKEY used in provision.sh
+    #   SERVER_PATH    app checkout on the server (provision.sh APP_DIR,
+    #                  default: $HOME/homelabs-upload)
+    runs-on: ubuntu-latest
+    concurrency:
+      group: deploy
+      cancel-in-progress: false
     steps:
-      - name: Fix workspace permissions
-        run: docker run --rm -v $PWD:/app alpine sh -c "chown -R $(id -u):$(id -g) /app" || true
-      
-      - uses: actions/checkout@v4
+      - name: Build and Deploy over SSH
+        uses: appleboy/ssh-action@v1
         with:
-          # Default `clean: true` runs `git clean -ffdx`, which deletes
-          # gitignored runtime files on the server (server/.env with
-          # CORS_ORIGIN, local ./data leftovers). Keep them across deploys.
-          clean: false
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            set -e
+            cd "${{ secrets.SERVER_PATH }}"
+            # Sync to the exact tested commit. Untracked runtime files
+            # (server/.env, volumes) are untouched — only tracked code moves.
+            git fetch origin
+            git checkout ${{ github.sha }}
+            cd server
+            docker compose build
+            docker compose down --remove-orphans >/dev/null 2>&1 || true
 
-      - name: Build and Deploy
-        run: |
-          set -e
-          cd server
-          docker compose build
-          docker compose down --remove-orphans >/dev/null 2>&1 || true
-          
-          # Clean up any stale container holding port 8081
-          HOLDER="$(docker ps --format '{{.Names}} {{.Image}} {{.Ports}}' 2>/dev/null | grep '8081->8080' || true)"
-          if [ -n "$HOLDER" ]; then
-            echo "port holder: $HOLDER"
-            IMG="$(echo "$HOLDER" | awk '{print $2}')"
-            if [ "$IMG" = "server-backend" ] || [ "$IMG" = "docker.io/library/server-backend" ]; then
-              NAME="$(echo "$HOLDER" | awk '{print $1}')"
-              echo "stale own image container ($NAME) – stopping and removing"
-              docker stop "$NAME" >/dev/null
-              docker rm "$NAME" >/dev/null
-            else
-              echo "::error::host port 8081 is held by a foreign container:"
-              echo "$HOLDER"
-              echo "Stop it (docker stop <name>) or move our port, then re-run."
-              exit 1
+            # Clean up any stale container holding port 8081
+            HOLDER="$(docker ps --format '{{.Names}} {{.Image}} {{.Ports}}' 2>/dev/null | grep '8081->8080' || true)"
+            if [ -n "$HOLDER" ]; then
+              echo "port holder: $HOLDER"
+              IMG="$(echo "$HOLDER" | awk '{print $2}')"
+              if [ "$IMG" = "server-backend" ] || [ "$IMG" = "docker.io/library/server-backend" ]; then
+                NAME="$(echo "$HOLDER" | awk '{print $1}')"
+                echo "stale own image container ($NAME) – stopping and removing"
+                docker stop "$NAME" >/dev/null
+                docker rm "$NAME" >/dev/null
+              else
+                echo "::error::host port 8081 is held by a foreign container:"
+                echo "$HOLDER"
+                echo "Stop it (docker stop <name>) or move our port, then re-run."
+                exit 1
+              fi
             fi
-          fi
-          
-          if command -v ss >/dev/null 2>&1; then
-            HP="$(ss -tlnp 2>/dev/null | grep ':8081 ' || true)"
-            if [ -n "$HP" ]; then
-              echo "::error::host port 8081 is held by a host process (not docker):"
-              echo "$HP"
-              echo "Stop it (e.g. kill <pid> / systemctl stop <service>), then re-run."
-              exit 1
+
+            if command -v ss >/dev/null 2>&1; then
+              HP="$(ss -tlnp 2>/dev/null | grep ':8081 ' || true)"
+              if [ -n "$HP" ]; then
+                echo "::error::host port 8081 is held by a host process (not docker):"
+                echo "$HP"
+                echo "Stop it (e.g. kill <pid> / systemctl stop <service>), then re-run."
+                exit 1
+              fi
             fi
-          fi
-          
-          docker compose up -d
-          docker image prune -f
-          sleep 8
-          
-          # Health checks
-          curl -f http://localhost:8081/health
-          curl -s http://localhost:8081/ | grep -q "NodeVault"
-          curl -s http://localhost:8081/nodevault/ | grep -q "NodeVault"
+
+            docker compose up -d
+            docker image prune -f
+            sleep 8
+
+            # Health checks
+            curl -f http://localhost:8081/health
+            curl -s http://localhost:8081/ | grep -q "NodeVault"
+            curl -s http://localhost:8081/nodevault/ | grep -q "NodeVault"
