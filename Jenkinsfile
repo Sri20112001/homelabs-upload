@@ -1,48 +1,33 @@
-// Jenkins declarative pipeline for homelabs-upload (NodeVault).
-//
-// Jenkins checks out the repository using the GitHub credential
-// "github-homelabs-upload" and then performs the heavy work on the
-// application server over SSH.
-//
-// Required Jenkins credentials:
-//   - github-homelabs-upload
-//       Kind: Username with password
-//       Username: Sri20112001
-//       Password: GitHub Personal Access Token
-//
-//   - homelabs-ssh-key
-//       Kind: SSH Username with private key
-//       Used for SSH access to the application server.
-//
-// The application server must have a checkout of this repository at
-// SERVER_PATH.
-
 pipeline {
     agent none
+
+    options {
+        skipDefaultCheckout(true)
+    }
 
     parameters {
         string(
             name: 'SERVER_HOST',
-            defaultValue: '',
-            description: 'Server IP/hostname (SSH, port 22)'
+            defaultValue: 'YOUR_VPS_IP',
+            description: 'VPS IP address or hostname'
         )
 
         string(
             name: 'SERVER_USER',
             defaultValue: 'administrator',
-            description: 'Deploy user on the server'
+            description: 'SSH user on the VPS'
         )
 
         string(
             name: 'SERVER_PATH',
             defaultValue: '/home/administrator/homelabs-upload',
-            description: 'App checkout path on the server'
+            description: 'Application deployment directory on the VPS'
         )
 
         booleanParam(
             name: 'DEPLOY',
             defaultValue: true,
-            description: 'Run the deploy stage after build/test'
+            description: 'Deploy after tests and frontend build'
         )
     }
 
@@ -62,56 +47,19 @@ pipeline {
             }
         }
 
-        stage('Sync server checkout') {
-            agent any
-
-            steps {
-                withCredentials([
-                    sshUserPrivateKey(
-                        credentialsId: 'homelabs-ssh-key',
-                        keyFileVariable: 'SSH_KEY'
-                    )
-                ]) {
-                    sh '''
-                        set -e
-
-                        ssh \
-                            -i "$SSH_KEY" \
-                            -o StrictHostKeyChecking=no \
-                            "$SERVER_USER@$SERVER_HOST" \
-                            "cd $SERVER_PATH && \
-                             git fetch origin && \
-                             git checkout $GIT_COMMIT"
-                    '''
-                }
-            }
-        }
-
         stage('Backend vet + test') {
             agent any
 
             steps {
-                withCredentials([
-                    sshUserPrivateKey(
-                        credentialsId: 'homelabs-ssh-key',
-                        keyFileVariable: 'SSH_KEY'
-                    )
-                ]) {
-                    sh '''
-                        set -e
+                sh '''
+                    set -e
 
-                        ssh \
-                            -i "$SSH_KEY" \
-                            -o StrictHostKeyChecking=no \
-                            "$SERVER_USER@$SERVER_HOST" \
-                            "cd $SERVER_PATH/server && \
-                             docker run --rm \
-                             -v \\$PWD:/work \
-                             -w /work \
-                             golang:1.26-alpine \
-                             sh -c 'go vet ./... && go test ./...'"
-                    '''
-                }
+                    docker run --rm \
+                        -v "$PWD/server:/work" \
+                        -w /work \
+                        golang:1.26-alpine \
+                        sh -c 'go vet ./... && go test ./...'
+                '''
             }
         }
 
@@ -119,25 +67,56 @@ pipeline {
             agent any
 
             steps {
+                sh '''
+                    set -e
+
+                    docker run --rm \
+                        -v "$PWD/client:/work" \
+                        -w /work \
+                        node:22-alpine \
+                        sh -c 'npm ci && npm run build'
+                '''
+            }
+        }
+
+        stage('Sync application to server') {
+            when {
+                expression {
+                    return params.DEPLOY
+                }
+            }
+
+            agent any
+
+            steps {
                 withCredentials([
                     sshUserPrivateKey(
                         credentialsId: 'homelabs-ssh-key',
                         keyFileVariable: 'SSH_KEY'
                     )
                 ]) {
+
                     sh '''
                         set -e
+
+                        echo "Creating deployment directory..."
 
                         ssh \
                             -i "$SSH_KEY" \
                             -o StrictHostKeyChecking=no \
                             "$SERVER_USER@$SERVER_HOST" \
-                            "cd $SERVER_PATH/client && \
-                             docker run --rm \
-                             -v \\$PWD:/work \
-                             -w /work \
-                             node:22-alpine \
-                             sh -c 'npm ci && npm run build'"
+                            "mkdir -p '$SERVER_PATH'"
+
+                        echo "Syncing application source..."
+
+                        rsync -az --delete \
+                            --exclude='.git/' \
+                            --exclude='server/data/' \
+                            -e "ssh -i $SSH_KEY -o StrictHostKeyChecking=no" \
+                            ./ \
+                            "$SERVER_USER@$SERVER_HOST:$SERVER_PATH/"
+
+                        echo "Application sync completed."
                     '''
                 }
             }
@@ -159,6 +138,7 @@ pipeline {
                         keyFileVariable: 'SSH_KEY'
                     )
                 ]) {
+
                     sh '''
                         set -e
 
@@ -166,16 +146,37 @@ pipeline {
                             -i "$SSH_KEY" \
                             -o StrictHostKeyChecking=no \
                             "$SERVER_USER@$SERVER_HOST" \
-                            "set -e; \
-                             cd $SERVER_PATH/server; \
-                             docker compose build; \
-                             docker compose down --remove-orphans >/dev/null 2>&1 || true; \
-                             docker compose up -d; \
-                             docker image prune -f; \
-                             sleep 8; \
-                             curl -f http://localhost:8081/health; \
-                             curl -s http://localhost:8081/ | grep -q NodeVault; \
-                             curl -s http://localhost:8081/nodevault/ | grep -q NodeVault"
+                            "
+                            set -e
+
+                            cd '$SERVER_PATH/server'
+
+                            echo 'Building Docker images...'
+                            docker compose build
+
+                            echo 'Stopping existing containers...'
+                            docker compose down --remove-orphans || true
+
+                            echo 'Starting application...'
+                            docker compose up -d
+
+                            echo 'Removing unused Docker images...'
+                            docker image prune -f
+
+                            echo 'Waiting for application...'
+                            sleep 8
+
+                            echo 'Checking health endpoint...'
+                            curl -f http://localhost:8081/health
+
+                            echo 'Checking NodeVault root...'
+                            curl -s http://localhost:8081/ | grep -q NodeVault
+
+                            echo 'Checking NodeVault application...'
+                            curl -s http://localhost:8081/nodevault/ | grep -q NodeVault
+
+                            echo 'Deployment successful.'
+                            "
                     '''
                 }
             }
