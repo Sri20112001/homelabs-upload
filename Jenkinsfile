@@ -4,9 +4,9 @@
 // on the app server over SSH, where Docker is installed.
 //
 // Required Jenkins setup:
-//   - SSH Agent plugin + an "SSH Username with private key" credential
-//     with ID "homelabs-ssh-key" (private half authorized on the server
-//     via server/provision.sh).
+//   - Credentials Binding plugin + an "SSH Username with private key"
+//     credential with ID "homelabs-ssh-key" (private half authorized on
+//     the server via server/provision.sh).
 //   - The server must have a git checkout of this repo at SERVER_PATH.
 
 pipeline {
@@ -31,10 +31,10 @@ pipeline {
         stage('Sync server checkout') {
             agent any
             steps {
-                sshagent(['homelabs-ssh-key']) {
-                    sh """
-                        ssh -o StrictHostKeyChecking=no ${params.SERVER_USER}@${params.SERVER_HOST} "cd ${params.SERVER_PATH} && git fetch origin && git checkout ${env.GIT_COMMIT}"
-                    """
+                withCredentials([sshUserPrivateKey(credentialsId: 'homelabs-ssh-key', keyFileVariable: 'SSH_KEY')]) {
+                    sh '''
+                        ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$SERVER_USER@$SERVER_HOST" "cd $SERVER_PATH && git fetch origin && git checkout $GIT_COMMIT"
+                    '''
                 }
             }
         }
@@ -42,10 +42,10 @@ pipeline {
         stage('Backend vet + test') {
             agent any
             steps {
-                sshagent(['homelabs-ssh-key']) {
-                    sh """
-                        ssh -o StrictHostKeyChecking=no ${params.SERVER_USER}@${params.SERVER_HOST} "cd ${params.SERVER_PATH}/server && docker run --rm -v \$PWD:/work -w /work golang:1.26-alpine sh -c 'go vet ./... && go test ./...'"
-                    """
+                withCredentials([sshUserPrivateKey(credentialsId: 'homelabs-ssh-key', keyFileVariable: 'SSH_KEY')]) {
+                    sh '''
+                        ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$SERVER_USER@$SERVER_HOST" "cd $SERVER_PATH/server && docker run --rm -v \$PWD:/work -w /work golang:1.26-alpine sh -c 'go vet ./... && go test ./...'"
+                    '''
                 }
             }
         }
@@ -53,10 +53,10 @@ pipeline {
         stage('Frontend build') {
             agent any
             steps {
-                sshagent(['homelabs-ssh-key']) {
-                    sh """
-                        ssh -o StrictHostKeyChecking=no ${params.SERVER_USER}@${params.SERVER_HOST} "cd ${params.SERVER_PATH}/client && docker run --rm -v \$PWD:/work -w /work node:22-alpine sh -c 'npm ci && npm run build'"
-                    """
+                withCredentials([sshUserPrivateKey(credentialsId: 'homelabs-ssh-key', keyFileVariable: 'SSH_KEY')]) {
+                    sh '''
+                        ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$SERVER_USER@$SERVER_HOST" "cd $SERVER_PATH/client && docker run --rm -v \$PWD:/work -w /work node:22-alpine sh -c 'npm ci && npm run build'"
+                    '''
                 }
             }
         }
@@ -67,11 +67,11 @@ pipeline {
                 expression { return params.DEPLOY }
             }
             steps {
-                sshagent(['homelabs-ssh-key']) {
-                    sh """
+                withCredentials([sshUserPrivateKey(credentialsId: 'homelabs-ssh-key', keyFileVariable: 'SSH_KEY')]) {
+                    sh '''
                         set -e
-                        ssh -o StrictHostKeyChecking=no ${params.SERVER_USER}@${params.SERVER_HOST} "set -e; cd ${params.SERVER_PATH}/server; docker compose build; docker compose down --remove-orphans >/dev/null 2>&1 || true; docker compose up -d; docker image prune -f; sleep 8; curl -f http://localhost:8081/health; curl -s http://localhost:8081/ | grep -q NodeVault; curl -s http://localhost:8081/nodevault/ | grep -q NodeVault"
-                    """
+                        ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$SERVER_USER@$SERVER_HOST" "set -e; cd $SERVER_PATH/server; docker compose build; docker compose down --remove-orphans >/dev/null 2>&1 || true; docker compose up -d; docker image prune -f; sleep 8; curl -f http://localhost:8081/health; curl -s http://localhost:8081/ | grep -q NodeVault; curl -s http://localhost:8081/nodevault/ | grep -q NodeVault"
+                    '''
                 }
             }
         }
