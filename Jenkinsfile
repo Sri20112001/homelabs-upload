@@ -3,7 +3,8 @@
 // build the Vite frontend, build the Docker image, then deploy over SSH.
 //
 // Required Jenkins setup:
-//   - Docker available on the agents that run the "Image" and "Deploy" stages.
+//   - Docker daemon available on the agent (no extra plugins needed).
+//     Only plugins required: Pipeline + SSH Agent + Credentials.
 //   - An "SSH Username with private key" credential with ID "homelabs-ssh-key"
 //     (private half of the key authorized on the server via server/provision.sh).
 //   - Adjust SERVER_USER / SERVER_PATH defaults below or override per build.
@@ -26,22 +27,16 @@ pipeline {
         }
 
         stage('Backend vet + test') {
-            agent { docker { image 'golang:1.26-alpine' } }
+            agent any
             steps {
-                dir('server') {
-                    sh 'go vet ./...'
-                    sh 'go test ./...'
-                }
+                sh 'docker run --rm -v "$WORKSPACE/server:/work" -w /work golang:1.26-alpine sh -c "go vet ./... && go test ./..."'
             }
         }
 
         stage('Frontend build') {
-            agent { docker { image 'node:22-alpine' } }
+            agent any
             steps {
-                dir('client') {
-                    sh 'npm ci'
-                    sh 'npm run build'
-                }
+                sh 'docker run --rm -v "$WORKSPACE/client:/work" -w /work node:22-alpine sh -c "npm ci && npm run build"'
             }
         }
 
