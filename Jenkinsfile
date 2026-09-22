@@ -43,7 +43,7 @@ pipeline {
                     credentialsId: 'github-homelabs-upload'
                 )
 
-                echo "Built commit: ${env.GIT_COMMIT}"
+                sh 'echo "Built commit: $(git rev-parse HEAD)"'
             }
         }
 
@@ -63,21 +63,17 @@ pipeline {
             }
         }
 
-        stage('Frontend build') {
-            agent any
-
-            steps {
-                sh '''
-                    set -e
-
-                    docker run --rm \
-                        -v "$PWD/client:/work" \
-                        -w /work \
-                        node:22-alpine \
-                        sh -c 'npm ci && npm run build'
-                '''
-            }
-        }
+stage('Frontend build') {
+    agent any
+    steps {
+        sh '''
+            set -e
+            cd client
+            npm ci
+            npm run build
+        '''
+    }
+}
 
         stage('Sync application to server') {
             when {
