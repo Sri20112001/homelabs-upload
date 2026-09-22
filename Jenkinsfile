@@ -48,20 +48,16 @@ pipeline {
         }
 
         stage('Backend vet + test') {
-            agent any
-
-            steps {
-                sh '''
-                    set -e
-
-                    docker run --rm \
-                        -v "$PWD/server:/work" \
-                        -w /work \
-                        golang:1.26-alpine \
-                        sh -c 'go vet ./... && go test ./...'
-                '''
-            }
-        }
+    agent any
+    steps {
+        sh '''
+            set -e
+            cd server
+            go vet ./...
+            go test ./...
+        '''
+    }
+}
 
 stage('Frontend build') {
     agent any
