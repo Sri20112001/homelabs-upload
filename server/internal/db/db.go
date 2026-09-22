@@ -15,20 +15,23 @@ import (
 // the server is unreachable — the database is mandatory, not optional.
 //
 // Log tables (activity, app_logs) are append-only: after migrating, Open
-// installs immutability triggers that reject UPDATE and DELETE rows, so
-// log records can never be altered or removed — not even by admins or by
+// installs immutability triggers that reject UPDATE, DELETE, and TRUNCATE,
+// so log records can never be altered or removed — not even by admins or by
 // direct SQL. Retention/purge is intentionally unsupported.
 func Open(dsn string, models ...any) (*gorm.DB, error) {
 	database, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
 		return nil, fmt.Errorf("postgres connect: %w", err)
 	}
+
 	if err := database.AutoMigrate(models...); err != nil {
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
+
 	if err := enforceAppendOnlyLogs(database); err != nil {
 		return nil, fmt.Errorf("enforce append-only logs: %w", err)
 	}
+
 	return database, nil
 }
 
@@ -37,11 +40,13 @@ func Open(dsn string, models ...any) (*gorm.DB, error) {
 var appendOnlyLogTables = []string{"activity", "app_logs"}
 
 // enforceAppendOnlyLogs installs a shared trigger function plus one
-// BEFORE UPDATE OR DELETE trigger per log table. The trigger raises an
-// exception, aborting any mutation transaction. INSERT stays allowed, so
-// normal logging is unaffected. Re-running is idempotent (CREATE OR REPLACE
-// + DROP IF EXISTS), which also repairs a manually-dropped trigger on the
-// next boot/connect.
+// BEFORE UPDATE OR DELETE trigger and one BEFORE TRUNCATE trigger per log
+// table. The trigger raises an exception, aborting any mutation transaction.
+//
+// INSERT stays allowed, so normal logging is unaffected.
+//
+// Re-running is idempotent (CREATE OR REPLACE + DROP IF EXISTS), which also
+// repairs manually dropped triggers on the next boot/connect.
 func enforceAppendOnlyLogs(database *gorm.DB) error {
 	const fn = `
 CREATE OR REPLACE FUNCTION reject_log_mutation()
@@ -51,31 +56,48 @@ BEGIN
   RETURN NULL;
 END;
 $$ LANGUAGE plpgsql;`
+
 	if err := database.Exec(fn).Error; err != nil {
 		return err
 	}
+
 	for _, table := range appendOnlyLogTables {
 		trigger := fmt.Sprintf("trg_%s_append_only", table)
-		// Quote identifiers via format to keep table/trigger names safe;
-		// names come from a fixed allowlist above, never user input.
+		truncateTrigger := fmt.Sprintf("%s_no_truncate", trigger)
+
+		// Table and trigger names come from the fixed allowlist above,
+		// never from user input.
 		sql := fmt.Sprintf(`
 DO $$
 BEGIN
   IF to_regclass('public.%[1]s') IS NOT NULL THEN
+
+    -- Protect UPDATE and DELETE.
     DROP TRIGGER IF EXISTS %[2]s ON public.%[1]s;
+
     CREATE TRIGGER %[2]s
       BEFORE UPDATE OR DELETE ON public.%[1]s
-      FOR EACH ROW EXECUTE FUNCTION reject_log_mutation();
-    -- TRUNCATE bypasses row triggers: block it with a rule instead.
-    DROP RULE IF EXISTS %[2]s_no_truncate ON public.%[1]s;
-    CREATE RULE %[2]s_no_truncate AS ON TRUNCATE TO public.%[1]s DO INSTEAD NOTHING;
+      FOR EACH ROW
+      EXECUTE FUNCTION reject_log_mutation();
+
+    -- TRUNCATE bypasses row-level triggers, so protect it with a
+    -- statement-level TRUNCATE trigger.
+    DROP TRIGGER IF EXISTS %[3]s ON public.%[1]s;
+
+    CREATE TRIGGER %[3]s
+      BEFORE TRUNCATE ON public.%[1]s
+      FOR EACH STATEMENT
+      EXECUTE FUNCTION reject_log_mutation();
+
   END IF;
 END
-$$;`, table, trigger)
+$$;`, table, trigger, truncateTrigger)
+
 		if err := database.Exec(sql).Error; err != nil {
 			return fmt.Errorf("%s: %w", table, err)
 		}
 	}
+
 	return nil
 }
 
@@ -85,5 +107,6 @@ func Ping(database *gorm.DB) error {
 	if err != nil {
 		return err
 	}
+
 	return sqlDB.Ping()
 }
