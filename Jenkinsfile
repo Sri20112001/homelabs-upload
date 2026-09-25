@@ -71,48 +71,47 @@ stage('Frontend build') {
     }
 }
 
-        stage('Sync application to server') {
-            when {
-                expression {
-                    return params.DEPLOY
-                }
-            }
-
-            agent any
-
-            steps {
-                withCredentials([
-                    sshUserPrivateKey(
-                        credentialsId: 'homelabs-ssh-key',
-                        keyFileVariable: 'SSH_KEY'
-                    )
-                ]) {
-
-                    sh '''
-                        set -e
-
-                        echo "Creating deployment directory..."
-
-                        ssh \
-                            -i "$SSH_KEY" \
-                            -o StrictHostKeyChecking=no \
-                            "$SERVER_USER@$SERVER_HOST" \
-                            "mkdir -p '$SERVER_PATH'"
-
-                        echo "Syncing application source..."
-
-                        rsync -az --delete \
-                            --exclude='.git/' \
-                            --exclude='server/data/' \
-                            -e "ssh -i $SSH_KEY -o StrictHostKeyChecking=no" \
-                            ./ \
-                            "$SERVER_USER@$SERVER_HOST:$SERVER_PATH/"
-
-                        echo "Application sync completed."
-                    '''
-                }
-            }
+stage('Sync application to server') {
+    when {
+        expression {
+            return params.DEPLOY
         }
+    }
+
+    agent any
+
+    steps {
+        withCredentials([
+            sshUserPrivateKey(
+                credentialsId: 'homelabs-ssh-key',
+                keyFileVariable: 'SSH_KEY'
+            )
+        ]) {
+            sh '''
+                set -e
+
+                echo "Creating deployment directory..."
+
+                ssh \
+                    -i "$SSH_KEY" \
+                    -o StrictHostKeyChecking=no \
+                    "$SERVER_USER@$SERVER_HOST" \
+                    "mkdir -p '$SERVER_PATH'"
+
+                echo "Syncing application source..."
+
+                rsync -az --delete \
+                    --exclude='.git/' \
+                    --exclude='server/data/' \
+                    -e "ssh -i '$SSH_KEY' -o StrictHostKeyChecking=no" \
+                    ./ \
+                    "$SERVER_USER@$SERVER_HOST:$SERVER_PATH/"
+
+                echo "Application sync completed."
+            '''
+        }
+    }
+}
 
         stage('Deploy') {
             when {
