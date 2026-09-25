@@ -10,14 +10,6 @@ pipeline {
         SERVER_PATH = '/home/administrator/homelabs-upload'
     }
 
-    parameters {
-        booleanParam(
-            name: 'DEPLOY',
-            defaultValue: true,
-            description: 'Deploy after tests and frontend build'
-        )
-    }
-
     stages {
 
         stage('Checkout') {
@@ -96,12 +88,6 @@ pipeline {
         }
 
         stage('Sync application to server') {
-            when {
-                expression {
-                    return params.DEPLOY
-                }
-            }
-
             agent any
 
             steps {
@@ -152,12 +138,6 @@ pipeline {
         }
 
         stage('Deploy') {
-            when {
-                expression {
-                    return params.DEPLOY
-                }
-            }
-
             agent any
 
             steps {
