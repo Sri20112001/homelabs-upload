@@ -29,7 +29,9 @@ pipeline {
                     credentialsId: 'github-homelabs-upload'
                 )
 
-                sh 'echo "Built commit: $(git rev-parse HEAD)"'
+                sh '''
+                    echo "Built commit: $(git rev-parse HEAD)"
+                '''
             }
         }
 
@@ -42,8 +44,13 @@ pipeline {
 
                     cd server
 
+                    echo "Running Go vet..."
                     go vet ./...
+
+                    echo "Running Go tests..."
                     go test ./...
+
+                    echo "Backend checks passed."
                 '''
             }
         }
@@ -57,8 +64,13 @@ pipeline {
 
                     cd client
 
+                    echo "Installing frontend dependencies..."
                     npm ci
+
+                    echo "Building frontend..."
                     npm run build
+
+                    echo "Frontend build completed."
                 '''
             }
         }
@@ -76,18 +88,22 @@ pipeline {
                 withCredentials([
                     sshUserPrivateKey(
                         credentialsId: 'homelabs-ssh-key',
-                        keyFileVariable: 'SSH_KEY'
+                        keyFileVariable: 'SSH_KEY',
+                        usernameVariable: 'SSH_USER'
                     )
                 ]) {
                     sh '''
                         set -e
+
+                        echo "Deployment target: $DEPLOY_HOST"
+                        echo "Deployment path: $SERVER_PATH"
 
                         echo "Creating deployment directory..."
 
                         ssh \
                             -i "$SSH_KEY" \
                             -o StrictHostKeyChecking=no \
-                            administrator@59.92.62.130 \
+                            "$SSH_USER@$DEPLOY_HOST" \
                             "mkdir -p '$SERVER_PATH'"
 
                         echo "Syncing application source..."
@@ -98,7 +114,7 @@ pipeline {
                             --exclude='.git/' \
                             --exclude='server/data/' \
                             ./ \
-                            "administrator@59.92.62.130:$SERVER_PATH/"
+                            "$SSH_USER@$DEPLOY_HOST:$SERVER_PATH/"
 
                         echo "Application sync completed."
                     '''
@@ -119,46 +135,75 @@ pipeline {
                 withCredentials([
                     sshUserPrivateKey(
                         credentialsId: 'homelabs-ssh-key',
-                        keyFileVariable: 'SSH_KEY'
+                        keyFileVariable: 'SSH_KEY',
+                        usernameVariable: 'SSH_USER'
                     )
                 ]) {
                     sh '''
                         set -e
 
+                        echo "Connecting to deployment server..."
+
                         ssh \
                             -i "$SSH_KEY" \
                             -o StrictHostKeyChecking=no \
-                            administrator@59.92.62.130 \
+                            "$SSH_USER@$DEPLOY_HOST" \
                             "
                             set -e
 
                             cd '$SERVER_PATH/server'
 
-                            echo 'Building Docker images...'
+                            echo '========================================'
+                            echo 'Building Docker images'
+                            echo '========================================'
+
                             docker compose build
 
-                            echo 'Stopping existing containers...'
+                            echo '========================================'
+                            echo 'Stopping existing containers'
+                            echo '========================================'
+
                             docker compose down --remove-orphans || true
 
-                            echo 'Starting application...'
+                            echo '========================================'
+                            echo 'Starting application'
+                            echo '========================================'
+
                             docker compose up -d
 
-                            echo 'Removing unused Docker images...'
+                            echo '========================================'
+                            echo 'Removing unused Docker images'
+                            echo '========================================'
+
                             docker image prune -f
 
-                            echo 'Waiting for application...'
+                            echo '========================================'
+                            echo 'Waiting for application'
+                            echo '========================================'
+
                             sleep 8
 
-                            echo 'Checking health endpoint...'
+                            echo '========================================'
+                            echo 'Checking health endpoint'
+                            echo '========================================'
+
                             curl -f http://localhost:9630/health
 
-                            echo 'Checking NodeVault root...'
+                            echo '========================================'
+                            echo 'Checking NodeVault root'
+                            echo '========================================'
+
                             curl -s http://localhost:9630/ | grep -q NodeVault
 
-                            echo 'Checking NodeVault application...'
+                            echo '========================================'
+                            echo 'Checking NodeVault application'
+                            echo '========================================'
+
                             curl -s http://localhost:9630/nodevault/ | grep -q NodeVault
 
+                            echo '========================================'
                             echo 'Deployment successful.'
+                            echo '========================================'
                             "
                     '''
                 }
@@ -173,6 +218,10 @@ pipeline {
 
         failure {
             echo 'Pipeline failed — check the failing stage log above.'
+        }
+
+        always {
+            echo 'Pipeline execution completed.'
         }
     }
 }
