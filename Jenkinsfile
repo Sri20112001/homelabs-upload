@@ -1,3 +1,4 @@
+```groovy
 pipeline {
     agent none
 
@@ -36,70 +37,77 @@ pipeline {
         }
 
         stage('Backend vet + test') {
-    agent any
-    steps {
-        sh '''
-            set -e
-            cd server
-            go vet ./...
-            go test ./...
-        '''
-    }
-}
+            agent any
 
-stage('Frontend build') {
-    agent any
-    steps {
-        sh '''
-            set -e
-            cd client
-            npm ci
-            npm run build
-        '''
-    }
-}
+            steps {
+                sh '''
+                    set -e
 
-stage('Sync application to server') {
-    when {
-        expression {
-            return params.DEPLOY
+                    cd server
+
+                    go vet ./...
+                    go test ./...
+                '''
+            }
         }
-    }
 
-    agent any
+        stage('Frontend build') {
+            agent any
 
-    steps {
-        withCredentials([
-            sshUserPrivateKey(
-                credentialsId: 'homelabs-ssh-key',
-                keyFileVariable: 'SSH_KEY'
-            )
-        ]) {
-            sh '''
-                set -e
+            steps {
+                sh '''
+                    set -e
 
-                echo "Creating deployment directory..."
+                    cd client
 
-                ssh \
-                    -i "$SSH_KEY" \
-                    -o StrictHostKeyChecking=no \
-                    "$SERVER_USER@$SERVER_HOST" \
-                    "mkdir -p '$SERVER_PATH'"
-
-                echo "Syncing application source..."
-
-                rsync -az --delete \
-                    --exclude='.git/' \
-                    --exclude='server/data/' \
-                    -e "ssh -i '$SSH_KEY' -o StrictHostKeyChecking=no" \
-                    ./ \
-                    "$SERVER_USER@$SERVER_HOST:$SERVER_PATH/"
-
-                echo "Application sync completed."
-            '''
+                    npm ci
+                    npm run build
+                '''
+            }
         }
-    }
-}
+
+        stage('Sync application to server') {
+            when {
+                expression {
+                    return params.DEPLOY
+                }
+            }
+
+            agent any
+
+            steps {
+                withCredentials([
+                    sshUserPrivateKey(
+                        credentialsId: 'homelabs-ssh-key',
+                        keyFileVariable: 'SSH_KEY'
+                    )
+                ]) {
+                    sh '''
+                        set -e
+
+                        echo "Creating deployment directory..."
+
+                        ssh \
+                            -i "$SSH_KEY" \
+                            -o StrictHostKeyChecking=no \
+                            "$SERVER_USER@$SERVER_HOST" \
+                            "mkdir -p '$SERVER_PATH'"
+
+                        echo "Syncing application source..."
+
+                        export RSYNC_RSH="ssh -i '$SSH_KEY' -o StrictHostKeyChecking=no"
+
+                        rsync -az --delete \
+                            --exclude='.git/' \
+                            --exclude='server/data/' \
+                            ./ \
+                            "$SERVER_USER@$SERVER_HOST:$SERVER_PATH/"
+
+                        echo "Application sync completed."
+                    '''
+                }
+            }
+        }
 
         stage('Deploy') {
             when {
@@ -117,7 +125,6 @@ stage('Sync application to server') {
                         keyFileVariable: 'SSH_KEY'
                     )
                 ]) {
-
                     sh '''
                         set -e
 
@@ -172,3 +179,4 @@ stage('Sync application to server') {
         }
     }
 }
+```
