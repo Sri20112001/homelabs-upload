@@ -1,29 +1,15 @@
 pipeline {
-    agent any
+    agent none
 
     options {
         skipDefaultCheckout(true)
     }
 
+     environment {
+        SERVER_PATH = '/home/administrator/homelabs-upload'
+    }
+
     parameters {
-        string(
-            name: 'SERVER_HOST',
-            defaultValue: '',
-            description: 'VPS hostname or IP address (e.g. 192.168.1.10)'
-        )
-
-        string(
-            name: 'SERVER_USER',
-            defaultValue: 'administrator',
-            description: 'SSH user for deployment on the VPS'
-        )
-
-        string(
-            name: 'SERVER_PATH',
-            defaultValue: '/home/administrator/homelabs-upload',
-            description: 'Application deployment directory on the VPS'
-        )
-
         booleanParam(
             name: 'DEPLOY',
             defaultValue: true,
@@ -34,6 +20,8 @@ pipeline {
     stages {
 
         stage('Checkout') {
+            agent any
+
             steps {
                 git(
                     url: 'https://github.com/Sri20112001/homelabs-upload.git',
@@ -46,6 +34,8 @@ pipeline {
         }
 
         stage('Backend vet + test') {
+            agent any
+
             steps {
                 sh '''
                     set -e
@@ -59,6 +49,8 @@ pipeline {
         }
 
         stage('Frontend build') {
+            agent any
+
             steps {
                 sh '''
                     set -e
@@ -77,6 +69,8 @@ pipeline {
                     return params.DEPLOY
                 }
             }
+
+            agent any
 
             steps {
                 withCredentials([
@@ -119,6 +113,8 @@ pipeline {
                 }
             }
 
+            agent any
+
             steps {
                 withCredentials([
                     sshUserPrivateKey(
@@ -154,13 +150,13 @@ pipeline {
                             sleep 8
 
                             echo 'Checking health endpoint...'
-                            curl -f http://localhost:8081/health
+                            curl -f http://localhost:9630/health
 
                             echo 'Checking NodeVault root...'
-                            curl -s http://localhost:8081/ | grep -q NodeVault
+                            curl -s http://localhost:9630/ | grep -q NodeVault
 
                             echo 'Checking NodeVault application...'
-                            curl -s http://localhost:8081/nodevault/ | grep -q NodeVault
+                            curl -s http://localhost:9630/nodevault/ | grep -q NodeVault
 
                             echo 'Deployment successful.'
                             "
@@ -180,3 +176,4 @@ pipeline {
         }
     }
 }
+
