@@ -204,7 +204,7 @@ pipeline {
                             echo 'Checking health endpoint'
                             echo '========================================'
 
-                            curl -f http://localhost:9630/health
+                            curl -f http://localhost:8080/health
 
                             echo ''
                             echo 'Health check passed.'
@@ -213,7 +213,7 @@ pipeline {
                             echo 'Checking NodeVault root'
                             echo '========================================'
 
-                            curl -fsS http://localhost:9630/ | grep -q NodeVault
+                            curl -fsS http://localhost:8080/ | grep -q NodeVault
 
                             echo 'NodeVault root check passed.'
 
@@ -221,7 +221,7 @@ pipeline {
                             echo 'Checking NodeVault application'
                             echo '========================================'
 
-                            curl -fsS http://localhost:9630/nodevault/ | grep -q NodeVault
+                            curl -fsS http://localhost:8080/nodevault/ | grep -q NodeVault
 
                             echo 'NodeVault application check passed.'
 
