@@ -7,18 +7,6 @@ pipeline {
 
     parameters {
         string(
-            name: 'SERVER_HOST',
-            defaultValue: 'YOUR_VPS_IP',
-            description: 'VPS IP address or hostname'
-        )
-
-        string(
-            name: 'SERVER_USER',
-            defaultValue: 'administrator',
-            description: 'SSH user on the VPS'
-        )
-
-        string(
             name: 'SERVER_PATH',
             defaultValue: '/home/administrator/homelabs-upload',
             description: 'Application deployment directory on the VPS'
