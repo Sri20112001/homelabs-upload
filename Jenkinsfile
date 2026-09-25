@@ -1,11 +1,23 @@
 pipeline {
-    agent none
+    agent any
 
     options {
         skipDefaultCheckout(true)
     }
 
     parameters {
+        string(
+            name: 'SERVER_HOST',
+            defaultValue: '',
+            description: 'VPS hostname or IP address (e.g. 192.168.1.10)'
+        )
+
+        string(
+            name: 'SERVER_USER',
+            defaultValue: 'administrator',
+            description: 'SSH user for deployment on the VPS'
+        )
+
         string(
             name: 'SERVER_PATH',
             defaultValue: '/home/administrator/homelabs-upload',
@@ -22,8 +34,6 @@ pipeline {
     stages {
 
         stage('Checkout') {
-            agent any
-
             steps {
                 git(
                     url: 'https://github.com/Sri20112001/homelabs-upload.git',
@@ -36,8 +46,6 @@ pipeline {
         }
 
         stage('Backend vet + test') {
-            agent any
-
             steps {
                 sh '''
                     set -e
@@ -51,8 +59,6 @@ pipeline {
         }
 
         stage('Frontend build') {
-            agent any
-
             steps {
                 sh '''
                     set -e
@@ -71,8 +77,6 @@ pipeline {
                     return params.DEPLOY
                 }
             }
-
-            agent any
 
             steps {
                 withCredentials([
@@ -114,8 +118,6 @@ pipeline {
                     return params.DEPLOY
                 }
             }
-
-            agent any
 
             steps {
                 withCredentials([
