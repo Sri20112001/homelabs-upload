@@ -5,7 +5,7 @@ pipeline {
         skipDefaultCheckout(true)
     }
 
-     environment {
+    environment {
         SERVER_PATH = '/home/administrator/homelabs-upload'
     }
 
@@ -87,7 +87,7 @@ pipeline {
                         ssh \
                             -i "$SSH_KEY" \
                             -o StrictHostKeyChecking=no \
-                            "$SERVER_USER@$SERVER_HOST" \
+                            administrator@59.92.62.130 \
                             "mkdir -p '$SERVER_PATH'"
 
                         echo "Syncing application source..."
@@ -98,7 +98,7 @@ pipeline {
                             --exclude='.git/' \
                             --exclude='server/data/' \
                             ./ \
-                            "$SERVER_USER@$SERVER_HOST:$SERVER_PATH/"
+                            "administrator@59.92.62.130:$SERVER_PATH/"
 
                         echo "Application sync completed."
                     '''
@@ -128,7 +128,7 @@ pipeline {
                         ssh \
                             -i "$SSH_KEY" \
                             -o StrictHostKeyChecking=no \
-                            "$SERVER_USER@$SERVER_HOST" \
+                            administrator@59.92.62.130 \
                             "
                             set -e
 
@@ -176,4 +176,3 @@ pipeline {
         }
     }
 }
-
