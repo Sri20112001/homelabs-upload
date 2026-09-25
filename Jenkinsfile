@@ -213,17 +213,17 @@ pipeline {
                             echo 'Checking NodeVault root'
                             echo '========================================'
 
-                            curl -fsS http://localhost:8080/ | grep -q NodeVault
+curl -fsS http://localhost:8888/ | grep -q NodeVault
 
-                            echo 'NodeVault root check passed.'
+echo 'NodeVault root check passed.'
 
-                            echo '========================================'
-                            echo 'Checking NodeVault application'
-                            echo '========================================'
+echo '========================================'
+echo 'Checking NodeVault application'
+echo '========================================'
 
-                            curl -fsS http://localhost:8080/nodevault/ | grep -q NodeVault
+curl -fsS http://localhost:8888/nodevault/ | grep -q NodeVault
 
-                            echo 'NodeVault application check passed.'
+echo 'NodeVault application check passed.'
 
                             echo '========================================'
                             echo 'Deployment successful.'
