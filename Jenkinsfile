@@ -3,10 +3,19 @@ pipeline {
 
     options {
         skipDefaultCheckout(true)
+        timestamps()
     }
 
     environment {
         SERVER_PATH = '/home/administrator/homelabs-upload'
+    }
+
+    parameters {
+        booleanParam(
+            name: 'DEPLOY',
+            defaultValue: true,
+            description: 'Deploy after tests and frontend build'
+        )
     }
 
     stages {
@@ -22,7 +31,14 @@ pipeline {
                 )
 
                 sh '''
-                    echo "Built commit: $(git rev-parse HEAD)"
+                    set -e
+
+                    echo "========================================"
+                    echo "Checkout"
+                    echo "========================================"
+
+                    echo "Built commit:"
+                    git rev-parse HEAD
                 '''
             }
         }
@@ -36,10 +52,16 @@ pipeline {
 
                     cd server
 
-                    echo "Running Go vet..."
+                    echo "========================================"
+                    echo "Go vet"
+                    echo "========================================"
+
                     go vet ./...
 
-                    echo "Running Go tests..."
+                    echo "========================================"
+                    echo "Go tests"
+                    echo "========================================"
+
                     go test ./...
 
                     echo "Backend checks passed."
@@ -56,10 +78,16 @@ pipeline {
 
                     cd client
 
-                    echo "Installing frontend dependencies..."
+                    echo "========================================"
+                    echo "Installing frontend dependencies"
+                    echo "========================================"
+
                     npm ci
 
-                    echo "Building frontend..."
+                    echo "========================================"
+                    echo "Building frontend"
+                    echo "========================================"
+
                     npm run build
 
                     echo "Frontend build completed."
@@ -87,18 +115,27 @@ pipeline {
                     sh '''
                         set -e
 
-                        echo "Deployment target: $SERVER_HOST"
-                        echo "Deployment path: $SERVER_PATH"
+                        echo "========================================"
+                        echo "Deployment target"
+                        echo "========================================"
 
-                        echo "Creating deployment directory..."
+                        echo "Host: $DEPLOY_HOST"
+                        echo "User: $SSH_USER"
+                        echo "Path: $SERVER_PATH"
+
+                        echo "========================================"
+                        echo "Creating deployment directory"
+                        echo "========================================"
 
                         ssh \
                             -i "$SSH_KEY" \
                             -o StrictHostKeyChecking=no \
-                            "$SSH_USER@$SERVER_HOST" \
+                            "$SSH_USER@$DEPLOY_HOST" \
                             "mkdir -p '$SERVER_PATH'"
 
-                        echo "Syncing application source..."
+                        echo "========================================"
+                        echo "Syncing application"
+                        echo "========================================"
 
                         export RSYNC_RSH="ssh -i '$SSH_KEY' -o StrictHostKeyChecking=no"
 
@@ -106,7 +143,7 @@ pipeline {
                             --exclude='.git/' \
                             --exclude='server/data/' \
                             ./ \
-                            "$SSH_USER@$SERVER_HOST:$SERVER_PATH/"
+                            "$SSH_USER@$DEPLOY_HOST:$SERVER_PATH/"
 
                         echo "Application sync completed."
                     '''
@@ -134,16 +171,24 @@ pipeline {
                     sh '''
                         set -e
 
-                        echo "Connecting to deployment server..."
+                        echo "========================================"
+                        echo "Connecting to deployment server"
+                        echo "========================================"
 
                         ssh \
                             -i "$SSH_KEY" \
                             -o StrictHostKeyChecking=no \
-                            "$SSH_USER@$SERVER_HOST" \
+                            "$SSH_USER@$DEPLOY_HOST" \
                             "
                             set -e
 
                             cd '$SERVER_PATH/server'
+
+                            echo '========================================'
+                            echo 'Stopping existing application'
+                            echo '========================================'
+
+                            docker compose down --remove-orphans || true
 
                             echo '========================================'
                             echo 'Building Docker images'
@@ -152,16 +197,16 @@ pipeline {
                             docker compose build
 
                             echo '========================================'
-                            echo 'Stopping existing containers'
-                            echo '========================================'
-
-                            docker compose down --remove-orphans || true
-
-                            echo '========================================'
                             echo 'Starting application'
                             echo '========================================'
 
-                            docker compose up -d
+                            docker compose up -d --force-recreate
+
+                            echo '========================================'
+                            echo 'Application containers'
+                            echo '========================================'
+
+                            docker compose ps
 
                             echo '========================================'
                             echo 'Removing unused Docker images'
@@ -181,17 +226,24 @@ pipeline {
 
                             curl -f http://localhost:9630/health
 
+                            echo ''
+                            echo 'Health check passed.'
+
                             echo '========================================'
                             echo 'Checking NodeVault root'
                             echo '========================================'
 
-                            curl -s http://localhost:9630/ | grep -q NodeVault
+                            curl -fsS http://localhost:9630/ | grep -q NodeVault
+
+                            echo 'NodeVault root check passed.'
 
                             echo '========================================'
                             echo 'Checking NodeVault application'
                             echo '========================================'
 
-                            curl -s http://localhost:9630/nodevault/ | grep -q NodeVault
+                            curl -fsS http://localhost:9630/nodevault/ | grep -q NodeVault
+
+                            echo 'NodeVault application check passed.'
 
                             echo '========================================'
                             echo 'Deployment successful.'
