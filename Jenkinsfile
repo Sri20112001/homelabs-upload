@@ -9,14 +9,6 @@ pipeline {
         SERVER_PATH = '/home/administrator/homelabs-upload'
     }
 
-    parameters {
-        booleanParam(
-            name: 'DEPLOY',
-            defaultValue: true,
-            description: 'Deploy after tests and frontend build'
-        )
-    }
-
     stages {
 
         stage('Checkout') {
@@ -95,7 +87,7 @@ pipeline {
                     sh '''
                         set -e
 
-                        echo "Deployment target: $DEPLOY_HOST"
+                        echo "Deployment target: $SERVER_HOST"
                         echo "Deployment path: $SERVER_PATH"
 
                         echo "Creating deployment directory..."
@@ -103,7 +95,7 @@ pipeline {
                         ssh \
                             -i "$SSH_KEY" \
                             -o StrictHostKeyChecking=no \
-                            "$SSH_USER@$DEPLOY_HOST" \
+                            "$SSH_USER@$SERVER_HOST" \
                             "mkdir -p '$SERVER_PATH'"
 
                         echo "Syncing application source..."
@@ -114,7 +106,7 @@ pipeline {
                             --exclude='.git/' \
                             --exclude='server/data/' \
                             ./ \
-                            "$SSH_USER@$DEPLOY_HOST:$SERVER_PATH/"
+                            "$SSH_USER@$SERVER_HOST:$SERVER_PATH/"
 
                         echo "Application sync completed."
                     '''
@@ -147,7 +139,7 @@ pipeline {
                         ssh \
                             -i "$SSH_KEY" \
                             -o StrictHostKeyChecking=no \
-                            "$SSH_USER@$DEPLOY_HOST" \
+                            "$SSH_USER@$SERVER_HOST" \
                             "
                             set -e
 
